@@ -14,11 +14,11 @@ train_proportion = 0.8
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1.0 - train_proportion, shuffle=True, random_state=random_state_param)
 
 # Set parameters
-corels_params = {'policy':"objective", 'max_card':1, 'n_iter':10**8, 'min_support':0.05, 'verbosity':["hybrid"]} # Add "progress" to verbosity to display detailed information about the search!
+corels_params = {'policy':"objective", 'max_card':1, 'n_iter':10**5, 'min_support':0.05, 'verbosity':["hybrid"]} # Add "progress" to verbosity to display detailed information about the search!
 alpha_value = 2 # Specialization Coefficient (see Section 3.1.2 of our paper)
 lambdaValue = 0.001 # Regularization coefficient for sparsity
 beta_value = min([ (1 / X_train.shape[0]) / 2, lambdaValue / 2]) # Regularization coefficient for transparency - this value ensures that transparency will break ties between identically accurate and sparse models
-min_coverage = 0.8 # Desired minimum transparency (coverage of the interpretable part)
+min_coverage = 0.9 # Desired minimum transparency (coverage of the interpretable part)
 
 # Define a hybrid model
 bbox = RandomForestClassifier(random_state=42, min_samples_split=10, max_depth=10)

@@ -492,7 +492,7 @@ class HybridCORELSPostClassifier:
         # Done!
         self.is_fitted = False
         if "hybrid" in self.verbosity:
-            print("Hybrid model created!")
+            print("Hybrid model created!") 
 
     def load(fname):
         """
@@ -757,3 +757,33 @@ class HybridCORELSPostClassifier:
             pickle.dump(self, f)
 
         return self
+    
+
+    # Ziba tried to implement fairness within HybridCORELS but this only changes local file , so check with Julien
+    # def fairness(self, X, features=[], condition=[]):
+    #     if not features or not condition:
+    #         raise ValueError("Features and condition parameters must be specified to compute fairness metrics.")
+        
+    #     def set_condition(condition):  
+    #         indices_of_features = [i for i,j in enumerate(features) if j in condition]
+    #         condition_indices = np.all((X[:,indices_of_features]),axis=1)
+    #         return condition_indices
+        
+        
+    #     def compute_fairness(preds_types,complement = False):
+    #         condition_indices = set_condition(condition)
+    #         if complement:
+    #             condition_indices = np.logical_not(condition_indices)
+    #         total_count = condition_indices.sum() # total number of samples satisfying the condition
+    #         interpretable_count = preds_types[condition_indices].sum() # number of samples satisfying the condition going through the interpretable part
+    #         percentage_interpretable = (interpretable_count / total_count) * 100 if total_count > 0 else 0
+    #         return {
+    #             "condition": self.condition,
+    #             "total_count": int(total_count),
+    #             "interpretable_count": int(interpretable_count),
+    #             "percentage_interpretable": '%.2f' % percentage_interpretable
+    #         }
+    #     _, preds_types = self.predict_with_type(X)
+    #     compute_fairness(preds_types)
+    #     return self
+

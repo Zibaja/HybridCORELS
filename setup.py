@@ -2,7 +2,7 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 import os
 import sys
-#from Cython.Build import cythonize # uncomment to recythonize
+from Cython.Build import cythonize # uncomment to recythonize
 
 
 class build_numpy(build_ext):
@@ -11,6 +11,18 @@ class build_numpy(build_ext):
         __builtins__.__NUMPY_SETUP__ = False
         import numpy
         self.include_dirs.append(numpy.get_include())
+
+    def build_extensions(self):
+        import os
+        for ext in self.extensions:
+            cleaned = []
+            for d in getattr(ext, "include_dirs", []) or []:
+                # Drop the bare 'HybridCORELS' include dir that clashes with <version>
+                if os.path.abspath(d) == os.path.abspath("HybridCORELS"):
+                    continue
+                cleaned.append(d)
+            ext.include_dirs = cleaned
+        super().build_extensions()
 
 def install(gmp):
     description = 'Python module for Hybrid Rule Lists/Black-Box models, based on the Python binding of the CORELS algorithm'
@@ -30,19 +42,23 @@ def install(gmp):
     for i in range(len(sources)):
         sources[i] = source_dir + sources[i]
     
-    sources.append('HybridCORELS/_prefix_corels.cpp') # comment to recythonize
-    #sources.append(pyx_file) # uncomment to recythonize
+    #sources.append('HybridCORELS/_prefix_corels.cpp') # comment to recythonize
+    sources.append(pyx_file) # uncomment to recythonize
     sources.append('HybridCORELS/src/utils.cpp')
 
     cpp_args = ['-Wall', '-O3', '-std=c++11']
     libraries = []
-
+    include_dirs = ['HybridCORELS/src/', 'HybridCORELS/src/corels/src']
+    library_dirs = []
     if os.name == 'posix':
         libraries.append('m')
 
     if gmp:
         libraries.append('gmp')
         cpp_args.append('-DGMP')
+        # Hardcoded Homebrew GMP paths on macOS ARM
+        include_dirs.append('/opt/homebrew/opt/gmp/include')
+        library_dirs.append('/opt/homebrew/opt/gmp/lib')
 
     if os.name == 'nt':
         cpp_args.append('-D_hypot=hypot')
@@ -52,12 +68,13 @@ def install(gmp):
     extension = Extension("HybridCORELS._prefix_corels", 
                 sources = sources,
                 libraries = libraries,
-                include_dirs = ['HybridCORELS/src/', 'HybridCORELS/src/corels/src'],
+                include_dirs = include_dirs,
+                library_dirs=library_dirs,
                 language = "c++",
                 extra_compile_args = cpp_args)
 
     extensions = [extension]
-    #extensions = cythonize(extensions) # uncomment to recythonize
+    extensions = cythonize(extensions) # uncomment to recythonize
     #extensions[0].sources.append(pyx_file)
 
     numpy_version = 'numpy'
