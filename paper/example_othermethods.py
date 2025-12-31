@@ -1,0 +1,145 @@
+
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from HybridCORELS import HybridCORELSPreClassifier, HybridCORELSPostClassifier
+from exp_utils import get_data_norulemining, to_df, FairnessMeasure
+from HyRS import HybridRuleSetClassifier
+from companion_rule_list import CRL
+
+
+"""This script is to check other method like HyRS and CRL
+"""
+
+
+random_state_param = 42
+X, y, features, _ = get_data_norulemining("compas", {"train" : 0.8, "test" : 0.2})
+
+
+
+print("--------------- BB ---------------\n")
+df_X = to_df(X, features)
+# Fit a black-box
+bbox = RandomForestClassifier(random_state=42, min_samples_leaf=10, max_depth=10)
+bbox.fit(df_X["train"], y["train"])
+# Test performance
+print("BB Accuracy : ", np.mean(bbox.predict(df_X["test"]) == y["test"]), "\n")
+
+
+
+print("--------------- HyRS ---------------\n")
+# Set parameters
+hparams = {
+    "alpha" : 0.001,
+    "beta" : 0.02
+}
+
+# Define a hybrid model
+hyb_model = HybridRuleSetClassifier(bbox, **hparams)
+
+# Train the hybrid model
+hyb_model.fit(df_X["train"], y["train"], 100, T0=0.01, premined_rules=True, 
+                                            random_state=3, time_limit=10)
+
+print(hyb_model.get_description(df_X["test"], y["test"]))
+preds_train, preds_types_train = hyb_model.predict_with_type(df_X["train"])
+
+print(X["train"].shape)
+fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
+fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
+print(fairness_value)
+fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
+fairness_value = fairness.compute_fairness(preds_types_train, complement= True)['percentage_interpretable']
+print(fairness_value)
+fairness = FairnessMeasure(X["train"], features, ['neg_Gender=Male'])
+fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
+print(fairness_value)
+
+
+
+print("--------------- CRL ---------------\n")
+# Set parameters
+hparams = {
+    "max_card" : 2,
+    "alpha" : 0.01
+}
+
+# Define a hybrid model
+hyb_model = CRL(bbox, **hparams)
+
+# Train the hybrid model
+hyb_model.fit(df_X["train"], y["train"], n_iteration=50000, random_state=random_state_param+1, 
+                                                            premined_rules=True, time_limit=10)
+print(hyb_model.get_description(df_X["test"], y["test"]))
+
+y_pred, pred_type = hyb_model.predict_with_type(df_X["test"])
+
+
+print("Black-box usage:", np.mean(pred_type == 0))
+print("number of points sent to BB:", np.sum(pred_type == 0), 'All points:', len(pred_type))
+print("Rule usage:", np.mean(pred_type == 1))
+print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
+
+print(hyb_model.get_description(df_X["train"], y["train"]))
+
+y_pred, pred_type = hyb_model.predict_with_type(df_X["train"])
+
+print("For train dataset")
+print("Black-box usage:", np.mean(pred_type == 0))
+print("number of points sent to BB:", np.sum(pred_type == 0), 'All points:', len(pred_type))
+print("Rule usage:", np.mean(pred_type == 1))
+print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
+
+print(f'overall train accuracy {np.mean(y_pred == y["train"])}')
+
+print(50*'-')
+
+output_rules, rule_coverage, acc = hyb_model.test(df_X["train"], y["train"])
+print(output_rules)
+print(rule_coverage)
+print(acc)
+
+
+
+# print("---------------  HybridCORELSPreClassifier ---------------")
+# # Set parameters
+# corels_params = {
+#     'policy' : "objective", 
+#     'max_card' : 1, 
+#     'c' : 0.001, 
+#     'n_iter' : 10**6,
+#     'verbosity': []
+# }
+
+# alpha_value = 10
+# beta_value = 0.0
+# # Define a hybrid model
+# hyb_model = HybridCORELSPreClassifier(black_box_classifier=bbox, beta=beta_value, alpha=alpha_value, 
+#                                       min_coverage=0.8, **corels_params)
+# # Train the hybrid model
+# hyb_model.fit(X["train"], y["train"], features=features)
+
+# # Print the RuleList
+# print("\n", hyb_model, "\n")
+
+# # Test performance
+# yhat, covered_index = hyb_model.predict_with_type(X["test"])
+# print("HybridCORELSPreClassifier Accuracy : ", np.mean(yhat == y["test"])) 
+# print("Coverage of RuleList : ", np.sum(covered_index) / len(covered_index), "\n")
+
+
+
+# print("---------------  HybridCORELSPostClassifier ---------------")
+
+# hyb_model = HybridCORELSPostClassifier(black_box_classifier=bbox, beta=beta_value, min_coverage=0.8, 
+#                                        bb_pretrained=False, **corels_params)
+# # Train the hybrid model
+# hyb_model.fit(X["train"], y["train"], features=features)
+
+# # Print the RuleList
+# print("\n", hyb_model, "\n")
+
+# # Test performance
+# yhat, covered_index = hyb_model.predict_with_type(X["test"])
+# print("HybridCORELSPostClassifier Accuracy : ", np.mean(yhat == y["test"])) 
+# print("Coverage of RuleList : ", np.sum(covered_index) / len(covered_index), "\n")

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from tqdm import tqdm
 import time
 
-from rule_mining import generate_rulespace, screen_rules
+#from rule_mining import generate_rulespace, screen_rules #uncomment for rule mining (DONE BY ZIBA)
 
 @dataclass
 class Coverage:
@@ -103,10 +103,10 @@ class HybridRuleSetClassifier(object):
             self.nrules = all_rules
             self.nRMatrix = self.pRMatrix
         # Otherwise mine the rules
-        else:
-            _, prules, nrules = generate_rulespace(X, y, self.max_card, random_state=random_state)
-            self.prules, self.pRMatrix = screen_rules(prules, X, self.n_rules // 2, self.min_support)
-            self.nrules, self.nRMatrix = screen_rules(nrules, X, self.n_rules // 2, self.min_support)
+        # else:  #uncomment if you want to premine rules (DONE BY ZIBA)
+        #     _, prules, nrules = generate_rulespace(X, y, self.max_card, random_state=random_state)
+        #     self.prules, self.pRMatrix = screen_rules(prules, X, self.n_rules // 2, self.min_support)
+        #     self.nrules, self.nRMatrix = screen_rules(nrules, X, self.n_rules // 2, self.min_support)
 
         # Setup
         self.maps = []

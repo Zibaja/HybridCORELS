@@ -3,7 +3,7 @@ from HybridCORELS import *
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 import pandas as pd
-from utils import FairnessMeasure, get_condition_freq
+from utils import FairnessMeasure
 
 if __name__ == "__main__":
 
@@ -89,6 +89,7 @@ if __name__ == "__main__":
     print(f"The frequency of {fairness_gender.condition} is {fairness_gender.get_condition_freq():.2f} percent")
     fairness_result = fairness_gender.compute_fairness(preds_types_train, complement= False)
     print(f"Fairness results for {fairness_gender.condition} is: {fairness_result}")
+    fairness_gender.confusion_matrix(preds_train,y_train, preds_types_train,fairness_gender.cond_indices, detailed=False  )
 
     print(f"The frequency of negation of {fairness_gender.condition} is {(100- fairness_gender.get_condition_freq()):.2f} percent")
     fairness_result = fairness_gender.compute_fairness(preds_types_train, complement= True)

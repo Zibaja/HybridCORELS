@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 import warnings
 warnings.filterwarnings("ignore")
 
-from rule_mining import generate_rulespace
+#from rule_mining import generate_rulespace #uncomment if you want to do rule mining (DONE BY ZIBA)
 
 @dataclass
 class Coverage:
@@ -316,11 +316,11 @@ class CRL(object):
             self.n_rules = X.shape[1]
             self.len_rules = [1 for _ in range(self.n_rules)]
         # Otherwise mine the rules
-        else:
-            _, prules, nrules = generate_rulespace(X, y, self.max_card, random_state=random_state)
-            self.all_rules = prules + nrules
-            self.n_rules = len(self.all_rules)
-            self.len_rules = [len(self.all_rules[i]) for i in range(self.n_rules)]
+        # else:  #uncomment the whole block if you want to do rule mining (DONE BY ZIBA)
+        #     _, prules, nrules = generate_rulespace(X, y, self.max_card, random_state=random_state)
+        #     self.all_rules = prules + nrules
+        #     self.n_rules = len(self.all_rules)
+        #     self.len_rules = [len(self.all_rules[i]) for i in range(self.n_rules)]
 
         # Predictions and errors
         self.Y = bitarray(list(y))
@@ -401,9 +401,41 @@ class CRL(object):
         
         
         
-    #     return output_rules, test_cover_rate,test_acc, list(accumulate(test_cover_rate))
-    
-    
+    def predict_with_type(self, X):
+        """
+        Predict labels for X and indicate whether prediction
+        comes from interpretable rule list (1) or black-box (0).
+        """
+
+        N = X.shape[0]
+
+        # Default: black-box
+        y_pred = np.array(self.bbox.predict(X))
+        pred_type = np.zeros(N, dtype=int)
+
+        uncovered = np.ones(N, dtype=bool)
+
+        # Apply rules sequentially (EXACTLY like test())
+        for i, r_idx in enumerate(self.rule_idx):
+            rule_features = self.all_rules[r_idx]
+
+            # Explicit AND over literals
+            rule_cover = np.ones(N, dtype=bool)
+            for f in rule_features:
+                rule_cover &= (X[f].values == 1)
+
+            # Only catch uncovered points
+            rule_catch = rule_cover & uncovered
+
+            if np.any(rule_catch):
+                y_pred[rule_catch] = self.coverage.choose[i]
+                pred_type[rule_catch] = 1
+                uncovered[rule_catch] = False
+
+        return y_pred, pred_type
+
+
+
     def test(self, X, y):
         ybb = self.bbox.predict(X)
         N  = len(y)
