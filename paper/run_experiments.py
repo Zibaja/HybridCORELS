@@ -35,7 +35,7 @@ ESTIMATORS = {
             "alpha": 2,
             "lambdaValue" : 0.001,
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
-            "memory_limit": 4000,
+            "memory_limit": 8000,
             "min_coverage": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         },
     },
@@ -55,7 +55,7 @@ ESTIMATORS = {
         "hparams": {
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
             "lambdaValue" : 0.001,
-            "memory_limit": 4000,
+            "memory_limit": 8000,
             "min_coverage": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
         },
     },
@@ -76,7 +76,8 @@ ESTIMATORS = {
         ),
         "hparams": {
             "alpha": 0.001,
-            "beta": 0.02,
+            "beta": [0.001, 0.00215443, 0.00464159, 0.01, 0.02154435,
+                        0.04641589, 0.1, 0.21544347, 0.46415888, 1.0], #changed from 0.02 to 0.1 
             "n_iteration": 50000,
             "T0": 0.01,
         },
@@ -97,7 +98,8 @@ ESTIMATORS = {
         ),
         "hparams": {
             "max_card": 2,
-            "alpha": 0.01,
+            "alpha": [0.001, 0.0016681, 0.00278256, 0.00464159, 0.00774264,
+                        0.0129155,0.02154435, 0.03593814, 0.05994843, 0.1], ##I think 0.01 is better 
             "n_iteration": 50000,
         },
     },
@@ -107,18 +109,29 @@ ESTIMATORS = {
 CORELS_PARAMS = {
     "policy": "objective",
     "max_card": 1,
-    "n_iter": 10**7,
+    "n_iter": 10**9,
     'min_support':0.05,
     "verbosity": ["hybrid"],
 }
 
+# Trade-off parameter name for each model
+TRADEOFF_PARAM = {
+    "HybridCORELSPreClassifier": "min_coverage",
+    "HybridCORELSPostClassifier": "min_coverage",
+    "CRL": "alpha",
+    "HyRS": "beta",
+}
+
+TRADEOFF_VALUES = {"HybridCORELSPreClassifier": ESTIMATORS["HybridCORELSPreClassifier"]["hparams"]["min_coverage"],
+                   "HybridCORELSPostClassifier": ESTIMATORS["HybridCORELSPostClassifier"]["hparams"]["min_coverage"],
+                   "CRL": ESTIMATORS["CRL"]["hparams"]["alpha"],
+                   "HyRS": ESTIMATORS["HyRS"]["hparams"]["beta"]}
 
 # ===============================
 # Experiment grid (FLATTENED)
 # ===============================
 
-
-n_seeds = 50
+n_seeds = 10
 DATASETS = ["compas", "adult", "acs_employ"]
 SEEDS = list(range(n_seeds))
 
@@ -126,16 +139,19 @@ EXPERIMENTS = []
 
 for dataset in DATASETS:
     for model in ESTIMATORS:
-        min_covs = ESTIMATORS[model]["hparams"].get("min_coverage", [None])
-        for min_cov in min_covs:
+        for tardeoff_value in TRADEOFF_VALUES[model]:
             for seed in SEEDS:
                 EXPERIMENTS.append({
                     "dataset": dataset,
                     "model": model,
-                    "min_coverage": min_cov,
+                    TRADEOFF_PARAM[model]: tardeoff_value,
                     "seed": seed
                 })
 
+# for i,j in enumerate(EXPERIMENTS):
+#     if j['dataset']=='compas' and j['model']=='HybridCORELSPostClassifier' and j['seed'] == 0:
+#         print(i,j)
+# print(len(EXPERIMENTS))
 # ===============================
 # Utilities
 # ===============================
@@ -195,14 +211,42 @@ def evaluate_group(
     return icf, parse_confusion_matrix(CM)
 
 
+def update_trans_total(
+    trans_total, split, cond,
+    icf, cm):
+    trans_total[split][cond]['ICF'].append(icf)
+
+    for src in ['T', 'B']:
+        for k in ['TP', 'FP', 'TN', 'FN']:
+            trans_total[split][cond][k][src].append(cm[src][k])
+
+def evaluate_one_output(X, y,preds, preds_types,split,conditions,features,trans_total):
+
+    acc = float(np.mean(preds == y))
+    coverage = float(preds_types.mean())
+
+    for cond in conditions:
+        icf, cm = evaluate_group(
+            X.to_numpy() if isinstance(X, pd.DataFrame) else X,
+            y,
+            preds,
+            preds_types,
+            cond,
+            features
+        )
+        update_trans_total(trans_total, split, cond, icf, cm)
+
+    return acc, coverage
+
+
+
 ##############################
 
 
 
-#################################
+###############################
 
-
-def run_one_seed(model_key,bbox,X,y,features, prediction_name, min_cov, seed, conditions, time_limit,trans_total):
+def run_one_seed(model_key, bbox, X, y, features, prediction_name,tradeoff_value, seed, conditions, time_limit, trans_total):
 
     spec = ESTIMATORS[model_key]
     h = spec["hparams"].copy()
@@ -215,8 +259,7 @@ def run_one_seed(model_key,bbox,X,y,features, prediction_name, min_cov, seed, co
         "prediction_name": prediction_name,
     })
 
-    if min_cov is not None:
-        h["min_coverage"] = min_cov
+    h[TRADEOFF_PARAM[model_key]] = tradeoff_value
 
     if callable(h.get("beta", None)):
         h["beta"] = h["beta"](X["train"], h["lambdaValue"])
@@ -224,65 +267,64 @@ def run_one_seed(model_key,bbox,X,y,features, prediction_name, min_cov, seed, co
     model = spec["build"](bbox, h)
     spec["fit"](model, X["train"], y["train"], h)
 
-    #for train evaluation
-    preds_train, preds_types_train = model.predict_with_type(X["train"])
-    acc_train = np.mean(preds_train == y["train"])
-    coverage_rate_train = preds_types_train.mean()
+    if model_key in ['HybridCORELSPreClassifier','HybridCORELSPostClassifier']:
+        status = model.get_status()
+    else:
+        status = None
 
-    #for test evaluation
-    preds_test, preds_types_test = model.predict_with_type(X["test"])
-    acc_test = np.mean(preds_test == y["test"])
-    coverage_rate_test = preds_types_test.mean()
+    acc = {"train": [], "test": []}
+    cov = {"train": [], "test": []}
 
-    results = {
-    "model": model_key,
-    "min_coverage": min_cov,
-    "accuracy": {'train': acc_train, 'test': acc_test},
-    "coverage": {'train': coverage_rate_train, 'test': coverage_rate_test},
-    "seed":seed}
-    
-    for cond in conditions:
+    #  CRL returns multiple models 
+    if model_key == "CRL":
+        all_preds_tr, all_types_tr = model.predict_with_type_all(X["train"])
+        all_preds_te, all_types_te = model.predict_with_type_all(X["test"])
 
-        # ---- TRAIN ----
-        icf, cm = evaluate_group(
-            X["train"].to_numpy() if isinstance(X['train'], pd.DataFrame) else X["train"], y["train"],
-            preds_train, preds_types_train,
-            cond, features
-        )
+        for p_tr, t_tr, p_te, t_te in zip(all_preds_tr, all_types_tr,all_preds_te, all_types_te):
+            acc_train, coverage_rate_train = evaluate_one_output(X["train"], y["train"],p_tr, t_tr,"train", conditions, features, trans_total)
+            acc["train"].append(acc_train)
+            cov["train"].append(coverage_rate_train)
 
+            acc_test, coverage_rate_test = evaluate_one_output(X["test"], y["test"],p_te, t_te,"test", conditions, features, trans_total
+            )
+            acc["test"].append(acc_test)
+            cov["test"].append(coverage_rate_test)
 
-        trans_total['train'][cond]['ICF'].append(icf)
+    # ---- Single-model methods ----
+    else:
+        preds_train, preds_types_train= model.predict_with_type(X["train"])
+        preds_test, preds_types_test = model.predict_with_type(X["test"])
 
-        for src in ['T', 'B']:
-            for k in ['TP', 'FP', 'TN', 'FN']:
-                trans_total['train'][cond][k][src].append(cm[src][k])
+        acc_train, coverage_rate_train = evaluate_one_output(X["train"], y["train"],preds_train, preds_types_train,"train", conditions, features, trans_total)
+        acc["train"] = acc_train
+        cov["train"] = coverage_rate_train
 
-        # ---- TEST ----
-        icf, cm = evaluate_group(
-            X["test"].to_numpy() if isinstance(X['test'], pd.DataFrame) else X["test"] , y["test"],
-            preds_test, preds_types_test,
-            cond, features
-        )
+        acc_test, coverage_rate_test= evaluate_one_output(X["test"], y["test"],preds_test, preds_types_test ,"test", conditions, features, trans_total)
+        acc["test"] = acc_test
+        cov["test"] = coverage_rate_test
 
-        trans_total['test'][cond]['ICF'].append(icf)
-        
-        for src in ['T', 'B']:
-            for k in ['TP', 'FP', 'TN', 'FN']:
-                trans_total['test'][cond][k][src].append(cm[src][k])
+    return {
+        "model": model_key,
+        TRADEOFF_PARAM[model_key]: tradeoff_value,
+        "accuracy": acc,
+        "coverage": cov,
+        "seed": seed,
+        "status": status
+    }
 
-    return results
 
 
 def run_single_experiment(cfg):
 
     dataset_name = cfg["dataset"]
     model_key = cfg["model"]
-    min_cov = cfg["min_coverage"]
+    tradeoff_param = TRADEOFF_PARAM[model_key]
+    tradeoff_value = cfg[tradeoff_param]
     seed = cfg["seed"]
 
     np.random.seed(seed)
 
-    time_limit=10
+    time_limit=3600 #to be changed later
     train_proportion=0.8
     # Load data
     my_data = Dataset.from_csv(Path.cwd().parent/f'examples/data/{dataset_name}_mined.csv', dataset_name)
@@ -304,33 +346,35 @@ def run_single_experiment(cfg):
     # Set parameters
 
 
-    result_one_seed = run_one_seed( ### corret it 
+    result_one_seed = run_one_seed( 
         model_key=model_key,
         bbox=bbox,
         X={"train":df_X["train"], "test":df_X["test"]} if model_key in ["HyRS","CRL"] else X,
         y=y,
         features=features,
         prediction_name = prediction,
-        min_cov=min_cov,
+        tradeoff_value=tradeoff_value,
         seed=seed,
-        time_limit=time_limit,  #should be changed later
+        time_limit=time_limit, 
         conditions=condition, trans_total = trans_total)
 
 
     result = {
     "dataset": dataset_name,
     "model": model_key,
-    "min_coverage": min_cov,
+    TRADEOFF_PARAM[model_key]: tradeoff_value,
     "seed": seed,
     "accuracy": result_one_seed["accuracy"],
     "coverage": result_one_seed["coverage"],
-    "trans_total": trans_total}
+    "trans_total": trans_total,
+    "status": result_one_seed["status"]}
 
     out_dir = Path("results")
     out_dir.mkdir(exist_ok=True)
 
-    fname = f"{dataset_name}__{model_key}__mincov_{min_cov}__seed_{seed}.json"
+    fname = f"{dataset_name}__{model_key}__{TRADEOFF_PARAM[model_key]}_{tradeoff_value}__seed_{seed}.json"
     save_json(result, out_dir / fname)
+
 
 
 # ===============================
@@ -348,7 +392,8 @@ if __name__ == "__main__":
 
     dataset_name = cfg["dataset"]
     model_key = cfg["model"]
-    min_cov = cfg["min_coverage"]
+    tradeoff_param = TRADEOFF_PARAM[model_key]
+    tradeoff_value = cfg[tradeoff_param]
     seed = cfg["seed"]
 
     run_single_experiment(cfg)

@@ -31,7 +31,7 @@ print("--------------- HyRS ---------------\n")
 # Set parameters
 hparams = {
     "alpha" : 0.001,
-    "beta" : 0.02
+    "beta" : 0.1 #this significantly affects the coverage
 }
 
 # Define a hybrid model
@@ -43,17 +43,20 @@ hyb_model.fit(df_X["train"], y["train"], 100, T0=0.01, premined_rules=True,
 
 print(hyb_model.get_description(df_X["test"], y["test"]))
 preds_train, preds_types_train = hyb_model.predict_with_type(df_X["train"])
+print(f"Train Coverage is {np.mean (preds_types_train)}")
 
+preds_test, preds_types_test = hyb_model.predict_with_type(df_X["test"])
+print(f"Test Coverage is {np.mean (preds_types_test)}")
 print(X["train"].shape)
-fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
-fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
-print(fairness_value)
-fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
-fairness_value = fairness.compute_fairness(preds_types_train, complement= True)['percentage_interpretable']
-print(fairness_value)
-fairness = FairnessMeasure(X["train"], features, ['neg_Gender=Male'])
-fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
-print(fairness_value)
+# fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
+# fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
+# print(fairness_value)
+# fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
+# fairness_value = fairness.compute_fairness(preds_types_train, complement= True)['percentage_interpretable']
+# print(fairness_value)
+# fairness = FairnessMeasure(X["train"], features, ['neg_Gender=Male'])
+# fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
+# print(fairness_value)
 
 
 
@@ -68,8 +71,8 @@ hparams = {
 hyb_model = CRL(bbox, **hparams)
 
 # Train the hybrid model
-hyb_model.fit(df_X["train"], y["train"], n_iteration=50000, random_state=random_state_param+1, 
-                                                            premined_rules=True, time_limit=10)
+hyb_model.fit(df_X["train"], y["train"], n_iteration=50000,random_state=random_state_param+1, 
+                                                            premined_rules=True, time_limit=20)
 print(hyb_model.get_description(df_X["test"], y["test"]))
 
 y_pred, pred_type = hyb_model.predict_with_type(df_X["test"])
@@ -98,6 +101,31 @@ output_rules, rule_coverage, acc = hyb_model.test(df_X["train"], y["train"])
 print(output_rules)
 print(rule_coverage)
 print(acc)
+
+
+_, rule_coverage, acc= hyb_model.test(df_X["test"], y["test"])
+print('test rule coverage:')
+print(rule_coverage)
+print('test accuracy:')
+print(acc)
+
+# X_test is your test set
+all_preds, all_types = hyb_model.predict_with_type_all(df_X["test"])
+
+results = {"accuracy": {"train":[],"test":[]},"coverage":{"train":[],"test":[]}}
+for i, (y_pred, pred_type) in enumerate(zip(all_preds, all_types)):
+    acc = np.mean(y_pred == y["test"])
+    coverage = np.mean(pred_type)
+    results["accuracy"]["test"].append(acc)
+    results["coverage"]["test"].append(coverage)
+    print(f"Hybrid model with first {i+1} rules: ACC={acc:.3f}")
+
+print(results)
+
+
+# "accuracy": {'train': acc_train, 'test': acc_test},
+#     "coverage": {'train': coverage_rate_train, 'test': coverage_rate_test},
+
 
 
 

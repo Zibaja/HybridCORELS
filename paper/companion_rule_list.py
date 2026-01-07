@@ -435,6 +435,59 @@ class CRL(object):
         return y_pred, pred_type
 
 
+    def predict_with_type_all(self, X):
+        """
+        Predict labels for X using all incremental hybrid models.
+        Returns predictions and pred_type for each prefix of the rule list.
+
+        Returns:
+            all_y_pred: list of arrays, length = number of rules
+                        each array: predictions for that hybrid model
+            all_pred_type: list of arrays, same length
+                        each array: 1 if rule predicted, 0 if black-box
+            coverage: list of floats, fraction of instances handled by rules
+        """
+        N = X.shape[0]
+        K = len(self.rule_idx)  # number of rules
+        all_y_pred = []
+        all_pred_type = []
+        coverage = []
+
+        # Start with black-box predictions
+        y_pred_base = np.array(self.bbox.predict(X))
+        uncovered = np.ones(N, dtype=bool)
+        pred_type_base = np.zeros(N, dtype=int)
+
+        # Keep track of covered points cumulatively
+        y_pred_cum = y_pred_base.copy()
+        pred_type_cum = pred_type_base.copy()
+        uncovered_cum = uncovered.copy()
+
+        for i, r_idx in enumerate(self.rule_idx):
+            rule_features = self.all_rules[r_idx]
+
+            # Rule coverage: AND over all literals
+            rule_cover = np.ones(N, dtype=bool)
+            for f in rule_features:
+                rule_cover &= (X[f].values == 1)
+
+            # Only apply to uncovered points
+            rule_catch = rule_cover & uncovered_cum
+
+            if np.any(rule_catch):
+                y_pred_cum[rule_catch] = self.coverage.choose[i]
+                pred_type_cum[rule_catch] = 1
+                uncovered_cum[rule_catch] = False
+
+            # Store predictions for this incremental hybrid model
+            all_y_pred.append(y_pred_cum.copy())
+            all_pred_type.append(pred_type_cum.copy())
+
+            # Coverage: fraction handled by rules
+            coverage.append(np.mean(pred_type_cum))
+
+        return all_y_pred, all_pred_type
+
 
     def test(self, X, y):
         ybb = self.bbox.predict(X)

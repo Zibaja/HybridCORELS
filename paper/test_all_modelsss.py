@@ -172,7 +172,6 @@ def update_trans_total(
             trans_total[split][cond][k][src].append(cm[src][k])
 
 
-
 def run_one_seed(model_key,bbox,X,y,features, prediction_name, min_cov, seed, conditions, time_limit,trans_total):
 
     spec = ESTIMATORS[model_key]
@@ -195,15 +194,94 @@ def run_one_seed(model_key,bbox,X,y,features, prediction_name, min_cov, seed, co
     model = spec["build"](bbox, h)
     spec["fit"](model, X["train"], y["train"], h)
 
-    #for train evaluation
-    preds_train, preds_types_train = model.predict_with_type(X["train"])
-    acc_train = np.mean(preds_train == y["train"])
-    coverage_rate_train = preds_types_train.mean()
+    if model_key == 'CRL':
+        acc_train = []
+        coverage_rate_train = []
+        all_preds_train, all_types_train = model.predict_with_type_all(X["train"])
+        for i, (preds_train, preds_types_train) in enumerate(zip(all_preds_train, all_types_train)):
+            acc = np.mean(preds_train == y["train"])
+            coverage = np.mean(preds_types_train)
+            acc_train.append(acc)
+            coverage_rate_train.append(coverage) 
+            for cond in conditions:
 
-    #for test evaluation
-    preds_test, preds_types_test = model.predict_with_type(X["test"])
-    acc_test = np.mean(preds_test == y["test"])
-    coverage_rate_test = preds_types_test.mean()
+                # ---- TRAIN ----
+                icf, cm = evaluate_group(
+                    X["train"].to_numpy() if isinstance(X['train'], pd.DataFrame) else X["train"], y["train"],
+                    preds_train, preds_types_train,
+                    cond, features
+                )
+                update_trans_total(trans_total, 'train', cond,icf, cm)
+
+                # trans_total['train'][cond]['ICF'].append(icf)
+
+                # for src in ['T', 'B']:
+                #     for k in ['TP', 'FP', 'TN', 'FN']:
+                #         trans_total['train'][cond][k][src].append(cm[src][k])
+                
+        acc_test = []
+        coverage_rate_test = []
+        all_preds_test, all_types_test = model.predict_with_type_all(X["test"])
+        for i, (preds_test, preds_types_test) in enumerate(zip(all_preds_test, all_types_test)):
+            acc = np.mean(preds_test == y["test"])
+            coverage = np.mean(preds_types_test)
+            acc_test.append(acc)
+            coverage_rate_test.append(coverage) 
+            for cond in conditions:
+                # ---- TEST ----
+                icf, cm = evaluate_group(
+                    X["test"].to_numpy() if isinstance(X['test'], pd.DataFrame) else X["test"] , y["test"],
+                    preds_test, preds_types_test,
+                    cond, features
+                )
+                update_trans_total(trans_total, 'test', cond,icf, cm)
+                # trans_total['test'][cond]['ICF'].append(icf)
+                
+                # for src in ['T', 'B']:
+                #     for k in ['TP', 'FP', 'TN', 'FN']:
+                #         trans_total['test'][cond][k][src].append(cm[src][k])
+                
+
+    else:
+        #for train evaluation
+        preds_train, preds_types_train = model.predict_with_type(X["train"])
+        acc_train = np.mean(preds_train == y["train"])
+        coverage_rate_train = preds_types_train.mean()
+
+        #for test evaluation
+        preds_test, preds_types_test = model.predict_with_type(X["test"])
+        acc_test = np.mean(preds_test == y["test"])
+        coverage_rate_test = preds_types_test.mean()
+
+
+        for cond in conditions:
+
+            # ---- TRAIN ----
+            icf, cm = evaluate_group(
+                X["train"].to_numpy() if isinstance(X['train'], pd.DataFrame) else X["train"], y["train"],
+                preds_train, preds_types_train,
+                cond, features
+            )
+    
+            update_trans_total(trans_total, 'train', cond,icf, cm)
+            # trans_total['train'][cond]['ICF'].append(icf)
+
+            # for src in ['T', 'B']:
+            #     for k in ['TP', 'FP', 'TN', 'FN']:
+            #         trans_total['train'][cond][k][src].append(cm[src][k])
+
+            # ---- TEST ----
+            icf, cm = evaluate_group(
+                X["test"].to_numpy() if isinstance(X['test'], pd.DataFrame) else X["test"] , y["test"],
+                preds_test, preds_types_test,
+                cond, features
+            )
+            update_trans_total(trans_total, 'test', cond,icf, cm)
+            # trans_total['test'][cond]['ICF'].append(icf)
+            
+            # for src in ['T', 'B']:
+            #     for k in ['TP', 'FP', 'TN', 'FN']:
+            #         trans_total['test'][cond][k][src].append(cm[src][k])
 
     results = {
     "model": model_key,
@@ -211,36 +289,8 @@ def run_one_seed(model_key,bbox,X,y,features, prediction_name, min_cov, seed, co
     "accuracy": {'train': acc_train, 'test': acc_test},
     "coverage": {'train': coverage_rate_train, 'test': coverage_rate_test},
     "seed":seed}
-    
-    for cond in conditions:
-
-        # ---- TRAIN ----
-        icf, cm = evaluate_group(
-            X["train"].to_numpy() if isinstance(X['train'], pd.DataFrame) else X["train"], y["train"],
-            preds_train, preds_types_train,
-            cond, features
-        )
-
-
-        trans_total['train'][cond]['ICF'].append(icf)
-
-        for src in ['T', 'B']:
-            for k in ['TP', 'FP', 'TN', 'FN']:
-                trans_total['train'][cond][k][src].append(cm[src][k])
-
-        # ---- TEST ----
-        icf, cm = evaluate_group(
-            X["test"].to_numpy() if isinstance(X['test'], pd.DataFrame) else X["test"] , y["test"],
-            preds_test, preds_types_test,
-            cond, features
-        )
-
-        trans_total['test'][cond]['ICF'].append(icf)
-        
-        for src in ['T', 'B']:
-            for k in ['TP', 'FP', 'TN', 'FN']:
-                trans_total['test'][cond][k][src].append(cm[src][k])
-
+    print("------------------- Results for one seed ------------------")
+    print( results)
     return results
 
 
@@ -272,7 +322,7 @@ def run(dataset_name, n_seeds, train_proportion):
 
 
 
-    for model_key in ESTIMATORS.keys():
+    for model_key in ["CRL"]: #ESTIMATORS.keys()
 
         ALL_RESULTS[model_key] = {}
 
@@ -314,14 +364,14 @@ def run(dataset_name, n_seeds, train_proportion):
 
             ALL_RESULTS[model_key][min_cov] = trans_total
 
-    #print(ALL_RESULTS)
+    print(ALL_RESULTS)
 
-    save_json(ALL_RESULTS, Path.cwd().parent/f'paper/all_models_fairness_{dataset_name}.json')
+    #save_json(ALL_RESULTS, Path.cwd().parent/f'paper/all_models_fairness_{dataset_name}.json')
 
 
 
 if __name__ == "__main__":
-    for dataset_name in ["compas", "adult", "acs_employ"]:
+    for dataset_name in ["compas"]: #["compas", "adult", "acs_employ"]
         print(50*"-")
         print (f"Running for dataset: {dataset_name}")
         run(dataset_name, n_seeds=2, train_proportion=0.8)
