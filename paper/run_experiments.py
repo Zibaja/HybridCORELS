@@ -149,7 +149,7 @@ for dataset in DATASETS:
                 })
 
 # for i,j in enumerate(EXPERIMENTS):
-#     if j['dataset']=='compas' and j['model']=='HybridCORELSPostClassifier' and j['seed'] == 0:
+#     if j['dataset']=='acs_employ' and j['model']=='HybridCORELSPreClassifier':
 #         print(i,j)
 # print(len(EXPERIMENTS))
 # ===============================
@@ -165,6 +165,7 @@ def init_trans_total(conditions):
                 "FP": {"T": [], "B": []},
                 "TN": {"T": [], "B": []},
                 "TP": {"T": [], "B": []},
+                "Pos_Ratio" : {"T": [], "B": []},
             }
             for cond in conditions
         }
@@ -199,6 +200,12 @@ def parse_confusion_matrix(CM):
 def evaluate_group(
     X, y, preds, preds_type, condition, features):
     fairness = FairnessMeasure(X, features, [condition])
+    label_T = y[fairness.cond_indices & (preds_type==1)]
+    label_B = y[fairness.cond_indices & (preds_type==0)]
+    pos_ratio_T = np.sum(label_T)/label_T.shape[0]
+    pos_ratio_B = np.sum(label_B)/label_B.shape[0]
+    pos_ratio_all = np.sum(y[fairness.cond_indices])/(y[fairness.cond_indices]).shape[0]
+    pos_ratio = {'T':pos_ratio_T,"B":pos_ratio_B}
 
     icf = fairness.compute_fairness(preds_type, complement=False)['percentage_interpretable']
 
@@ -208,15 +215,14 @@ def evaluate_group(
         detailed=True
     )
 
-    return icf, parse_confusion_matrix(CM)
+    return icf, parse_confusion_matrix(CM) , pos_ratio
 
 
-def update_trans_total(
-    trans_total, split, cond,
-    icf, cm):
+def update_trans_total(trans_total, split, cond,icf, cm,pos_ratio):
+
     trans_total[split][cond]['ICF'].append(icf)
-
     for src in ['T', 'B']:
+        trans_total[split][cond]['Pos_Ratio'][src].append(pos_ratio[src])
         for k in ['TP', 'FP', 'TN', 'FN']:
             trans_total[split][cond][k][src].append(cm[src][k])
 
@@ -226,7 +232,7 @@ def evaluate_one_output(X, y,preds, preds_types,split,conditions,features,trans_
     coverage = float(preds_types.mean())
 
     for cond in conditions:
-        icf, cm = evaluate_group(
+        icf, cm, pos_ratio = evaluate_group(
             X.to_numpy() if isinstance(X, pd.DataFrame) else X,
             y,
             preds,
@@ -234,7 +240,7 @@ def evaluate_one_output(X, y,preds, preds_types,split,conditions,features,trans_
             cond,
             features
         )
-        update_trans_total(trans_total, split, cond, icf, cm)
+        update_trans_total(trans_total, split, cond, icf, cm, pos_ratio)
 
     return acc, coverage
 
@@ -285,8 +291,7 @@ def run_one_seed(model_key, bbox, X, y, features, prediction_name,tradeoff_value
             acc["train"].append(acc_train)
             cov["train"].append(coverage_rate_train)
 
-            acc_test, coverage_rate_test = evaluate_one_output(X["test"], y["test"],p_te, t_te,"test", conditions, features, trans_total
-            )
+            acc_test, coverage_rate_test = evaluate_one_output(X["test"], y["test"],p_te, t_te,"test", conditions, features, trans_total)
             acc["test"].append(acc_test)
             cov["test"].append(coverage_rate_test)
 
@@ -295,13 +300,25 @@ def run_one_seed(model_key, bbox, X, y, features, prediction_name,tradeoff_value
         preds_train, preds_types_train= model.predict_with_type(X["train"])
         preds_test, preds_types_test = model.predict_with_type(X["test"])
 
+        # label_train_T = y["train"][preds_types_train==1] #all labels going through interpretable
+        # label_train_B = y["train"][preds_types_train==0] #all labels going through BB
+        # pos_ration_T = np.sum(label_train_T)/label_train_T.shape[0]
+        # pos_ration_B = np.sum(label_train_B)/label_train_B.shape[0]
+        
         acc_train, coverage_rate_train = evaluate_one_output(X["train"], y["train"],preds_train, preds_types_train,"train", conditions, features, trans_total)
         acc["train"] = acc_train
         cov["train"] = coverage_rate_train
+        
 
-        acc_test, coverage_rate_test= evaluate_one_output(X["test"], y["test"],preds_test, preds_types_test ,"test", conditions, features, trans_total)
+
+        # label_train_T = y["test"][preds_types_test==1] #all labels going through interpretable
+        # label_train_B = y["test"][preds_types_test==0] #all labels going through BB
+        # pos_ration_T = np.sum(label_train_T)/label_train_T.shape[0]
+        # pos_ration_B = np.sum(label_train_B)/label_train_B.shape[0]
+        acc_test, coverage_rate_test = evaluate_one_output(X["test"], y["test"],preds_test, preds_types_test ,"test", conditions, features, trans_total)
         acc["test"] = acc_test
         cov["test"] = coverage_rate_test
+
 
     return {
         "model": model_key,
@@ -309,7 +326,7 @@ def run_one_seed(model_key, bbox, X, y, features, prediction_name,tradeoff_value
         "accuracy": acc,
         "coverage": cov,
         "seed": seed,
-        "status": status
+        "status": status,
     }
 
 
@@ -369,11 +386,12 @@ def run_single_experiment(cfg):
     "trans_total": trans_total,
     "status": result_one_seed["status"]}
 
-    out_dir = Path("results")
+    out_dir = Path("results_1")
     out_dir.mkdir(exist_ok=True)
 
     fname = f"{dataset_name}__{model_key}__{TRADEOFF_PARAM[model_key]}_{tradeoff_value}__seed_{seed}.json"
     save_json(result, out_dir / fname)
+
 
 
 
@@ -389,7 +407,7 @@ if __name__ == "__main__":
     expe_id = args.expe_id
 
     cfg = EXPERIMENTS[expe_id]
-
+   
     dataset_name = cfg["dataset"]
     model_key = cfg["model"]
     tradeoff_param = TRADEOFF_PARAM[model_key]
