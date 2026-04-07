@@ -1,19 +1,15 @@
-### In these lines , I would like to run experimnets for one dataset and one method , with bootstrap sampling ###
 
 # March 26,2024, Version 1.0
 
 
 import numpy as np
 from HybridCORELS import *
-from sklearn.ensemble import RandomForestClassifier
 from pathlib import Path
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
-from HybridCORELS import HybridCORELSPreClassifier, HybridCORELSPostClassifier
 from exp_utils import *
 from HyRS import HybridRuleSetClassifier
 from companion_rule_list import CRL
-import argparse
+import pickle
 
 
 # maybe I just start with finding all the models within Rashomon set to see how the number of bootstrap impacts the 
@@ -135,150 +131,47 @@ def store_if_new(y_pred):
 
 ###############################
 
-dataset_name = 'compas'
-model_key = 'HybridCORELSPreClassifier'
-tradeoff_param = TRADEOFF_PARAM[model_key]
-tradeoff_value = 0.8
-n_seeds = 10
-SEEDS = list(range(n_seeds))
-seed = SEEDS[3] #just to test the code for the first split, I will change it later to loop over all seeds
 
-time_limit=3600 #to be changed later
-#split information
-train_proportion=0.8
+# in this scripts , I want to load all pickle files , and then filter them based on epsilon and uniqueness
 
+Dataset_name = "compas"
+method = "HybridCORELSPostClassifier"
+seeed_split = 0
+min_transparency = 0.8
+epsilon = 0.03
 
-
-np.random.seed(seed)
-
-# Load data
-my_data = Dataset.from_csv(Path.cwd().parent/f'examples/data/{dataset_name}_mined.csv', dataset_name)
-my_data.pre_process()
-
-conditions = my_data.demographicGroup()
-conditions = conditions['All']
-trans_total = init_trans_total(conditions)
-X, y, features, prediction = my_data.get_data_norulemining(
-                        {"train" : train_proportion, "test" : 1-train_proportion}, random_state_param = seed)
-
-#convert numpy arrays to dataframes for HyRS and CRL
-df_X = my_data.to_df_from_dict(X)
-
-# Fit a black-box
-bbox = RandomForestClassifier(random_state=seed, min_samples_leaf=10, max_depth=10)
-#bbox.fit(X["train"], y["train"])
+all_models= []
+file_path = Path.cwd()/"bootstrap_results"
+for f in file_path.iterdir():
+    if Dataset_name in f.name and method in f.name and f"seed{seeed_split}" in f.name and f"param{min_transparency}" in f.name:
+        with open(f, "rb") as f:
+            one_round = pickle.load(f)
+            all_models.extend(one_round)
 
 
-spec = ESTIMATORS[model_key]
-h = spec["hparams"].copy()
 
-h.update({
-    "features": features,
-    "seed": seed,
-    "time_limit": time_limit,
-    "corels_params": CORELS_PARAMS,
-    "prediction_name": prediction,
-})
+print(f"Number of all bootstraps for {Dataset_name} and {method} and split seed {seeed_split} and transparency {min_transparency}: {len(all_models)}")
+whole_data_train_acc = all_models[0]['acc_train']
 
-h[TRADEOFF_PARAM[model_key]] = tradeoff_value #run one hyperparametre 
-
-if callable(h.get("beta", None)):
-    h["beta"] = h["beta"](X["train"], h["lambdaValue"])
+max_acc = max([i['acc_train'] for i in all_models])
 
 
-#Build and fit the model over whole training data
-model = spec["build"](bbox, h)
-spec["fit"](model, X["train"], y["train"], h)
-rules = [i['antecedents'][0]-1 for i in model.interpretable_part.rl().rules][:-1]
-
-
-if model_key in ['HybridCORELSPreClassifier','HybridCORELSPostClassifier']:
-    status = model.get_status()
+if max_acc - whole_data_train_acc < 0.00001:
+    print("Max accuracy is achieved over whole data.")
 else:
-    status = None
-
-acc = {"train": [], "test": []}
-cov = {"train": [], "test": []}
-
-#predict for train and test
-preds_train, preds_types_train= model.predict_with_type(X["train"])
-preds_test, preds_types_test = model.predict_with_type(X["test"])
-
-
-
-acc_train, coverage_rate_train = evaluate_one_output(X["train"], y["train"],preds_train, preds_types_train,"train", conditions, features, trans_total)
-acc["train"].append(acc_train) 
-cov["train"].append(coverage_rate_train)
-opt_acc = acc_train
-opt_preds_train = preds_train
-opt_preds_types_train = preds_types_train
-
-#for test
-acc_test, coverage_rate_test = evaluate_one_output(X["test"], y["test"],preds_test, preds_types_test ,"test", conditions, features, trans_total)
-acc["test"].append(acc_test)
-cov["test"].append(coverage_rate_test)
+    print("Max accuracy is significantly better than whole data accuracy.")
 
 unique_preds = {}
-rules_key = tuple(rules)
-pred_type_key = preds_types_train.tobytes()
-pred_key = preds_train.tobytes()
-model_key = (rules_key, pred_type_key, pred_key)
-key = preds_train.tobytes()
 
-if key not in unique_preds:
-    unique_preds[key] = preds_train.copy()
-
-B = 5  # number of bootstrap models
-n = len(X['train'])
+for i in all_models:
+    model_key = (i['rules'], i['preds_types_train'].tobytes(), i['preds_train'].tobytes())
+    if i['acc_train'] > max_acc - epsilon:
+        if model_key not in unique_preds:
+            unique_preds[model_key] = i.copy()
 
 
-epsilon = 0.01
-for b in range(B):
-    np.random.seed(b)  # different seed each time
-    
-    # sample indices with replacement
-    indices = np.random.choice(n, size=n, replace=True)
-    
-    X_boot = X['train'][indices]
-    y_boot = y['train'][indices]
-    #fit the model on  the bootstrap sample
-    spec["fit"](model, X_boot, y_boot, h)
+print(f"Number of unique models within epsilon {epsilon} : {len(unique_preds)}")
 
 
-    
 
-    #check predictions on the original training data and test data
-    preds_train, preds_types_train= model.predict_with_type(X['train'])
-    preds_test, preds_types_test = model.predict_with_type(X["test"])
-
-
-    acc_train_model = float(np.mean(preds_train == y['train'])) 
-    coverage = float(preds_types_train.mean())
-    
-    if acc_train_model > opt_acc:
-        opt_acc = acc_train_model
-        opt_preds_train = preds_train
-        opt_preds_types_train = preds_types_train
-
-    key = preds_train.tobytes() #do I need to check routing as well?
-    if acc_train_model >= opt_acc - epsilon : 
-        if key not in unique_preds:
-            unique_preds[key] = preds_train.copy()
-
-            acc_train, coverage_rate_train = evaluate_one_output(X['train'], y['train'],preds_train, preds_types_train,"train", conditions, features, trans_total)
-            acc["train"].append(acc_train) 
-            cov["train"].append(coverage_rate_train)
-
-            #for test
-            acc_test, coverage_rate_test = evaluate_one_output(X["test"], y["test"],preds_test, preds_types_test ,"test", conditions, features, trans_total)
-            acc["test"].append(acc_test)
-            cov["test"].append(coverage_rate_test)
-
-print(f"optimal acc is {opt_acc}")
-print(50*"-")
-print('train accuracy is...')
-print(acc["train"])
-print(50*"-")
-print('test accuracy is...')
-print(acc["test"])
 

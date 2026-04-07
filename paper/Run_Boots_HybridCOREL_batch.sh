@@ -2,7 +2,7 @@
 #SBATCH --job-name=hybridCOREL_bootstrap
 #SBATCH --array=0-49
 #SBATCH --time=08:00:00
-#SBATCH --mem=8G
+#SBATCH --mem=500G
 #SBATCH --cpus-per-task=1
 #SBATCH --output=logs/%A_%a.out
 #SBATCH --error=logs/%A_%a.err
