@@ -3,149 +3,10 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder
 #from rule_mining import mine_rules_preprocessing
-
 import os 
-import numpy as np 
-
-random_state_value = 42
-test_size_ratio = 0.3
-
-# # Load the new Adult dataset (using the provided folktables module)
-# from folktables import ACSDataSource, ACSEmployment, employment_filter
-
-
-# categories = {
-#     "AGEP" : {
-#         1.0 : "age_low",
-#         2.0 : "age_medium",
-#         3.0 : "age_high"
-#     },
-#     "SCHL" : {
-#         1.0: "No schooling completed",
-#         2.0: "Nursery school, preschool",
-#         3.0: "Kindergarten",
-#         4.0: "Grade 1",
-#         5.0: "Grade 2",
-#         6.0: "Grade 3",
-#         7.0: "Grade 4",
-#         8.0: "Grade 5",
-#         9.0: "Grade 6",
-#         10.0: "Grade 7",
-#         11.0: "Grade 8",
-#         12.0: "Grade 9",
-#         13.0: "Grade 10",
-#         14.0: "Grade 11",
-#         15.0: "12th grade - no diploma",
-#         16.0: "Regular high school diploma",
-#         17.0: "GED or alternative credential",
-#         18.0: "Some college, but less than 1 year",
-#         19.0: "1 or more years of college credit, no degree",
-#         20.0: "Associate's degree",
-#         21.0: "Bachelor's degree",
-#         22.0: "Master's degree",
-#         23.0: "Professional degree beyond a bachelor's degree",
-#         24.0: "Doctorate degree",
-#     },
-#     "MAR": {
-#         1.0: "Married",
-#         2.0: "Widowed",
-#         3.0: "Divorced",
-#         4.0: "Separated",
-#         5.0: "Never married or under 15 years old",
-#     },
-#     "SEX": {1.0: "Male", 2.0: "Female"},
-#     "RAC1P": {
-#         1.0: "White alone",
-#         2.0: "Black or African American alone",
-#         3.0: "American Indian alone",
-#         4.0: "Alaska Native alone",
-#         5.0: (
-#             "American Indian and Alaska Native tribes specified;"
-#             "or American Indian or Alaska Native,"
-#             "not specified and no other"
-#         ),
-#         6.0: "Asian alone",
-#         7.0: "Native Hawaiian and Other Pacific Islander alone",
-#         8.0: "Some Other Race alone",
-#         9.0: "Two or More Races",
-#     },
-#     "ESP" : {
-#         0.0 : "N/A (not own child of householder, and not child in subfamily)",
-#         1.0 : "Living with two parent : both employed",
-#         2.0 : "Living with two parent : Father employed",
-#         3.0 : "Living with two parent : Mother employed",
-#         4.0 : "Living with two parent : None employed",
-#         5.0 : "Living with Father : Employed",
-#         6.0 : "Living with Father : Not employed",
-#         7.0 : "Living with Mother : Employed",
-#         8.0 : "Living with Mother : Not employed",
-#     },
-#     "DIS" : {
-#         1.0 : "Disability",
-#         2.0 : "No disability"
-#     },
-#     "NATIVITY" : {
-#         1.0 : "Native",
-#         2.0 : "Foreign born"
-#     },
-#     "DREM" : {
-#         1.0 : "Cognitive difficulty",
-#         2.0 : "No Cognitive difficulty"
-#     },
-#     "RELP" : {
-#         0.0 : "Reference person",
-#         1.0 : "Husband/wife",
-#         2.0 : "Biological son or daughter",
-#         3.0 : "Adopted son or daughter",
-#         4.0 : "Stepson or stepdaughter",
-#         5.0 : "Brother or sister",
-#         6.0 : "Father or mother",
-#         7.0 : "Grandchild",
-#         8.0 : "Parent-in-law",
-#         9.0 : "Son-in-law or daughter-in-law",
-#         10.0 : "Other relative",
-#         11.0 : "Roomer or boarder",
-#         12.0 : "Housemate or roommate",
-#         13.0 : "Unmarried partner",
-#         14.0 : "Foster child",
-#         15.0 : "Other nonrelative",
-#         16.0 : "Institutionalized group quarters population",
-#         17.0 : "Noninstitutionalized group quarters population"
-#     }
-# }
-
-
-# def binarize_age(X):
-#     quantiles = np.quantile(X[:, 0], [0, 0.33, 0.66, 1])
-#     for q in range(3):
-#         index = np.where((quantiles[q] <= X[:, 0]) & (X[:, 0] <= quantiles[q+1]))[0]
-#         X[index, 0] = q+1
-
-
-# def generate_acs_data():
-#     data_source = ACSDataSource(survey_year='2018', horizon='1-Year', survey='person')
-#     acs_data = data_source.get_data(states=["TX"], download=True)
-#     acs_data = employment_filter(acs_data)
-#     features = ACSEmployment.features
-#     X, y, _ = ACSEmployment.df_to_numpy(acs_data)
-#     binarize_age(X)
-
-#     # Reorder features according to categories dict
-#     keep_features = list(categories.keys())
-#     keep_features_idx = [ features.index(f) for f in keep_features]
-#     X = X[:, keep_features_idx]
-
-#     # OHE the categorical features
-#     ohe = OneHotEncoder(sparse=False).fit_transform(X)
-#     ohe_features = []
-#     for feature_cat in categories.values():
-#         ohe_features += list(feature_cat.values())
-
-#     # Save the dataset
-#     ohe_df = pd.DataFrame(np.column_stack((ohe, y)).astype(int), 
-#                          columns=ohe_features+["Employed"])
-#     filename = os.path.join("data", "acs_employ.csv")
-#     ohe_df.to_csv(filename, encoding='utf-8', index=False)
+from HybridCORELS import HybridCORELSPreClassifier, HybridCORELSPostClassifier
+from HyRS import HybridRuleSetClassifier
+from companion_rule_list import CRL
 
 
 def age_data_modification(X,features):
@@ -837,3 +698,121 @@ class Dataset():
         return df_X
 
     
+
+
+##### Variabels 
+
+ESTIMATORS = {
+
+    "HybridCORELSPreClassifier": {
+        "build": lambda bbox, h: HybridCORELSPreClassifier(
+            black_box_classifier=bbox,
+            beta=h["beta"],
+            c = h["lambdaValue"],
+            alpha=h["alpha"],
+            min_coverage=h["min_coverage"],
+            obj_mode='collab',
+            **h["corels_params"]
+        ),
+        "fit": lambda model, X, y, h: model.fit(X, y, features=h["features"],
+                                                                prediction_name=h['prediction_name'], time_limit=h["time_limit"],
+                                                                memory_limit=h["memory_limit"]),
+        "hparams": {
+            "alpha": 2,
+            "lambdaValue" : 0.001,
+            "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
+            "memory_limit": 8000,
+            "min_coverage": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        },
+    },
+
+    "HybridCORELSPostClassifier": {
+        "build": lambda bbox, h: HybridCORELSPostClassifier(
+            black_box_classifier=bbox,
+            beta=h["beta"],
+            c = h["lambdaValue"],
+            min_coverage=h["min_coverage"],
+            bb_pretrained=False,
+            **h["corels_params"]
+        ),
+        "fit": lambda model, X, y, h: model.fit(X, y, features=h["features"],
+                                                                prediction_name=h['prediction_name'], time_limit=h["time_limit"],
+                                                                memory_limit=h["memory_limit"]),
+        "hparams": {
+            "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
+            "lambdaValue" : 0.001,
+            "memory_limit": 8000,
+            "min_coverage": [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+        },
+    },
+
+    "HyRS": {
+        "build": lambda bbox, h: HybridRuleSetClassifier(
+            bbox,
+            alpha=h["alpha"],
+            beta=h["beta"]
+        ),
+        "fit": lambda model, X, y, h: model.fit(
+            X, y,
+            h["n_iteration"],
+            T0=h["T0"],
+            premined_rules=True,
+            random_state=h["seed"],
+            time_limit=h["time_limit"]
+        ),
+        "hparams": {
+            "alpha": 0.001,
+            "beta": [0.001, 0.00215443, 0.00464159, 0.01, 0.02154435,
+                        0.04641589, 0.1, 0.21544347, 0.46415888, 1.0], #changed from 0.02 to 0.1 
+            "n_iteration": 50000,
+            "T0": 0.01,
+        },
+    },
+
+    "CRL": {
+        "build": lambda bbox, h: CRL(
+            bbox,
+            max_card=h["max_card"],
+            alpha=h["alpha"]
+        ),
+        "fit": lambda model, X, y, h: model.fit(
+            X, y,
+            n_iteration=h["n_iteration"],
+            random_state=h["seed"],
+            premined_rules=True,
+            time_limit=h["time_limit"]
+        ),
+        "hparams": {
+            "max_card": 2,
+            "alpha": [0.001, 0.0016681, 0.00278256, 0.00464159, 0.00774264,
+                        0.0129155,0.02154435, 0.03593814, 0.05994843, 0.1], ##I think 0.01 is better 
+            "n_iteration": 50000,
+        },
+    },
+}
+
+#Shared CORELS parameters
+CORELS_PARAMS = {
+    "policy": "objective",
+    "max_card": 1,
+    "n_iter": 10**7, #10**9 for server experiments
+    'min_support':0.05,
+    "verbosity": ["hybrid"],
+}
+
+# Trade-off parameter name for each model
+TRADEOFF_PARAM = {
+    "HybridCORELSPreClassifier": "min_coverage",
+    "HybridCORELSPostClassifier": "min_coverage",
+    "CRL": "alpha",
+    "HyRS": "beta",
+}
+
+TRADEOFF_VALUES = {"HybridCORELSPreClassifier": ESTIMATORS["HybridCORELSPreClassifier"]["hparams"]["min_coverage"],
+                   "HybridCORELSPostClassifier": ESTIMATORS["HybridCORELSPostClassifier"]["hparams"]["min_coverage"],
+                   "CRL": ESTIMATORS["CRL"]["hparams"]["alpha"],
+                   "HyRS": ESTIMATORS["HyRS"]["hparams"]["beta"]}
+
+
+
+

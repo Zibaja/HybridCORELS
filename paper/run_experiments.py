@@ -149,9 +149,9 @@ for dataset in DATASETS:
                 })
 
 # for i,j in enumerate(EXPERIMENTS):
-#     if j['dataset']=='acs_employ' and j['model']=='HybridCORELSPreClassifier':
+#     if j['dataset']=='compas' and j['model']=='HyRS' and j['seed']==0:
 #         print(i,j)
-# print(len(EXPERIMENTS))
+#print(len(EXPERIMENTS))
 # ===============================
 # Utilities
 # ===============================
@@ -202,8 +202,8 @@ def evaluate_group(
     fairness = FairnessMeasure(X, features, [condition])
     label_T = y[fairness.cond_indices & (preds_type==1)]
     label_B = y[fairness.cond_indices & (preds_type==0)]
-    pos_ratio_T = np.sum(label_T)/label_T.shape[0]
-    pos_ratio_B = np.sum(label_B)/label_B.shape[0]
+    pos_ratio_T = np.sum(label_T)/label_T.shape[0] if label_T.shape[0] > 0 else 0
+    pos_ratio_B = np.sum(label_B)/label_B.shape[0] if label_B.shape[0] > 0 else 0
     pos_ratio_all = np.sum(y[fairness.cond_indices])/(y[fairness.cond_indices]).shape[0]
     pos_ratio = {'T':pos_ratio_T,"B":pos_ratio_B}
 
@@ -341,7 +341,7 @@ def run_single_experiment(cfg):
 
     np.random.seed(seed)
 
-    time_limit=3600 #to be changed later
+    time_limit=10 #to be changed later
     train_proportion=0.8
     # Load data
     my_data = Dataset.from_csv(Path.cwd().parent/f'examples/data/{dataset_name}_mined.csv', dataset_name)
@@ -389,7 +389,7 @@ def run_single_experiment(cfg):
     out_dir = Path("results_1")
     out_dir.mkdir(exist_ok=True)
 
-    fname = f"{dataset_name}__{model_key}__{TRADEOFF_PARAM[model_key]}_{tradeoff_value}__seed_{seed}.json"
+    fname = f"TEST{dataset_name}__{model_key}__{TRADEOFF_PARAM[model_key]}_{tradeoff_value}__seed_{seed}.json"
     save_json(result, out_dir / fname)
 
 
