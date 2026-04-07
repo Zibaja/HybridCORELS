@@ -2,6 +2,9 @@
 paper/__pycache__/
 paper/analysis/__pycache__/
 paper/local_config.py
+paper/results_1/
+paper/test.ipynb
+paper/plots/
 .eggs/*
 *.o
 *.so
@@ -11,3 +14,4 @@ build/*
 HybridCORELS/__pycache__
 results
 DEADJOE
+*.json

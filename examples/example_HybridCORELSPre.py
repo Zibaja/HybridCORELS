@@ -18,7 +18,7 @@ corels_params = {'policy':"objective", 'max_card':1, 'n_iter':10**5, 'min_suppor
 alpha_value = 2 # Specialization Coefficient (see Section 3.1.2 of our paper)
 lambdaValue = 0.001 # Regularization coefficient for sparsity
 beta_value = min([ (1 / X_train.shape[0]) / 2, lambdaValue / 2]) # Regularization coefficient for transparency - this value ensures that transparency will break ties between identically accurate and sparse models
-min_coverage = 0.9 # Desired minimum transparency (coverage of the interpretable part)
+min_coverage = 0.8 # Desired minimum transparency (coverage of the interpretable part)
 
 # Define a hybrid model
 bbox = RandomForestClassifier(random_state=42, min_samples_split=10, max_depth=10)
@@ -39,6 +39,14 @@ hyb_model.fit(X_train, y_train, features=features, prediction_name=prediction, t
 print("Status = ", hyb_model.get_status()) # Indicates whether the training was performed to optimality or if any other ending condition was reached
 
 print("=> Trained model :", hyb_model)
+
+
+
+print("test by ziba:")
+print(hyb_model.interpretable_part.rl().rules)
+for i in hyb_model.interpretable_part.rl().rules:
+    print(features[(i['antecedents'][0]-1)])
+print([i['antecedents'][0]-1 for i in hyb_model.interpretable_part.rl().rules][:-1])
 
 # Evaluate training performances
 preds_train, preds_types_train = hyb_model.predict_with_type(X_train)
