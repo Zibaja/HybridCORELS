@@ -115,7 +115,7 @@ ESTIMATORS = {
 CORELS_PARAMS = {
     "policy": "objective",
     "max_card": 1,
-    "n_iter": 10**7,
+    "n_iter": 10**9,
     'min_support':0.05,
     "verbosity": ["hybrid"],
 }
@@ -353,11 +353,11 @@ if __name__ == "__main__":
         # print(cfg, filtered_experiments.index(cfg))
      
 
-    print(f"Total filtered jobs: {len(filtered_experiments)}")
+    #print(f"Total filtered jobs: {len(filtered_experiments)}")
 
     cfg = filtered_experiments[args.local_id]
 
-    print(f"Running configuration: {cfg}")
+    #print(f"Running configuration: {cfg}")
     results = run_one_bootsrap_batch(cfg, round_number=cfg['round'], n_batch=100)
     
     # Save results 
