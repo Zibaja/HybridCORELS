@@ -41,7 +41,7 @@ ESTIMATORS = {
             "alpha": 2,
             "lambdaValue" : 0.001,
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
-            "memory_limit": 4000,
+            "memory_limit": 8000,
             "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95]
         },
     },
@@ -61,7 +61,7 @@ ESTIMATORS = {
         "hparams": {
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
             "lambdaValue" : 0.001,
-            "memory_limit": 4000,
+            "memory_limit": 8000,
             "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95]
         },
     },
