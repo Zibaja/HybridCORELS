@@ -17,7 +17,7 @@ mkdir -p logs
 mkdir -p bootstrap_results
 
 # Run your script
-python Run_Boots_2.py \
+python Run_Boots_HybridCOREL.py \
     --dataset compas \
     --model HybridCORELSPostClassifier \
     --seed 0 \
