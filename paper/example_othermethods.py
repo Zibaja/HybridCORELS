@@ -43,6 +43,7 @@ hyb_model.fit(df_X["train"], y["train"], 100, T0=0.01, premined_rules=True,
 
 print(hyb_model.get_description(df_X["test"], y["test"]))
 
+print([features[i] for i in hyb_model.positive_rule_set])
 
 
 preds_train, preds_types_train = hyb_model.predict_with_type(df_X["train"])
@@ -63,71 +64,71 @@ print(X["train"].shape)
 
 
 
-# print("--------------- CRL ---------------\n")
-# # Set parameters
-# hparams = {
-#     "max_card" : 2,
-#     "alpha" : 0.01
-# }
+print("--------------- CRL ---------------\n")
+# Set parameters
+hparams = {
+    "max_card" : 2,
+    "alpha" : 0.01
+}
 
-# # Define a hybrid model
-# hyb_model = CRL(bbox, **hparams)
+# Define a hybrid model
+hyb_model = CRL(bbox, **hparams)
 
-# # Train the hybrid model
-# hyb_model.fit(df_X["train"], y["train"], n_iteration=50000,random_state=random_state_param+1, 
-#                                                             premined_rules=True, time_limit=20)
-# print(hyb_model.get_description(df_X["test"], y["test"]))
-
-# y_pred, pred_type = hyb_model.predict_with_type(df_X["test"])
+# Train the hybrid model
+hyb_model.fit(df_X["train"], y["train"], n_iteration=50000,random_state=random_state_param+1, 
+                                                            premined_rules=True, time_limit=20)
+print(hyb_model.get_description(df_X["test"], y["test"]))
 
 
-# print("Black-box usage:", np.mean(pred_type == 0))
-# print("number of points sent to BB:", np.sum(pred_type == 0), 'All points:', len(pred_type))
-# print("Rule usage:", np.mean(pred_type == 1))
-# print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
-
-# print(hyb_model.get_description(df_X["train"], y["train"]))
-
-# y_pred, pred_type = hyb_model.predict_with_type(df_X["train"])
-
-# print("For train dataset")
-# print("Black-box usage:", np.mean(pred_type == 0))
-# print("number of points sent to BB:", np.sum(pred_type == 0), 'All points:', len(pred_type))
-# print("Rule usage:", np.mean(pred_type == 1))
-# print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
-
-# print(f'overall train accuracy {np.mean(y_pred == y["train"])}')
-
-# print(50*'-')
-
-# output_rules, rule_coverage, acc = hyb_model.test(df_X["train"], y["train"])
-# print(output_rules)
-# print(rule_coverage)
-# print(acc)
+y_pred, pred_type = hyb_model.predict_with_type(df_X["test"])
 
 
-# _, rule_coverage, acc= hyb_model.test(df_X["test"], y["test"])
-# print('test rule coverage:')
-# print(rule_coverage)
-# print('test accuracy:')
-# print(acc)
+print("Black-box usage:", np.mean(pred_type == 0))
+print("number of points sent to BB:", np.sum(pred_type == 0), 'All points:', len(pred_type))
+print("Rule usage:", np.mean(pred_type == 1))
+print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
 
-# # X_test is your test set
-# all_preds, all_types = hyb_model.predict_with_type_all(df_X["test"])
+print(hyb_model.get_description(df_X["train"], y["train"]))
 
-# results = {"accuracy": {"train":[],"test":[]},"coverage":{"train":[],"test":[]}}
-# for i, (y_pred, pred_type) in enumerate(zip(all_preds, all_types)):
-#     acc = np.mean(y_pred == y["test"])
-#     coverage = np.mean(pred_type)
-#     results["accuracy"]["test"].append(acc)
-#     results["coverage"]["test"].append(coverage)
-#     print(f"Hybrid model with first {i+1} rules: ACC={acc:.3f}")
+y_pred, pred_type = hyb_model.predict_with_type(df_X["train"])
 
-# print(results)
+print("For train dataset")
+print("Black-box usage:", np.mean(pred_type == 0))
+print("number of points sent to BB:", np.sum(pred_type == 0), 'All points:', len(pred_type))
+print("Rule usage:", np.mean(pred_type == 1))
+print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
+
+print(f'overall train accuracy {np.mean(y_pred == y["train"])}')
+
+print(50*'-')
+
+output_rules, rule_coverage, acc = hyb_model.test(df_X["train"], y["train"])
+print(output_rules)
+print(rule_coverage)
+print(acc)
 
 
-# "accuracy": {'train': acc_train, 'test': acc_test},
-#     "coverage": {'train': coverage_rate_train, 'test': coverage_rate_test},
+output_rules, rule_coverage, acc= hyb_model.test(df_X["test"], y["test"])
+print(output_rules)
+print('test rule coverage:')
+print(rule_coverage)
+print('test accuracy:')
+print(acc)
+
+# X_test is your test set
+all_preds, all_types = hyb_model.predict_with_type_all(df_X["test"])
+
+results = {"accuracy": {"train":[],"test":[]},"coverage":{"train":[],"test":[]}}
+for i, (y_pred, pred_type) in enumerate(zip(all_preds, all_types)):
+    acc = np.mean(y_pred == y["test"])
+    coverage = np.mean(pred_type)
+    results["accuracy"]["test"].append(acc)
+    results["coverage"]["test"].append(coverage)
+    print(f"Hybrid model with first {i+1} rules: ACC={acc:.3f}")
+
+print(results)
+
+
 
 
 

@@ -16,8 +16,8 @@ module load python/3.10
 mkdir -p logs
 mkdir -p bootstrap_results
 
-# Run your script
-python Run_Boots_HybridCOREL.py \
+# Run script
+python Run_Boots.py \
     --dataset compas \
     --model HybridCORELSPostClassifier \
     --seed 0 \
