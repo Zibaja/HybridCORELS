@@ -17,7 +17,6 @@ import argparse
 import pickle
 
 
-
 # ===============================
 # ESTIMATORS dictionary here:
 # ===============================
@@ -173,7 +172,10 @@ for dataset in DATASETS:
 
 ###############################
 
+# import psutil
+# import os
 
+# process = psutil.Process(os.getpid())
 
 def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
     dataset_name = cfg["dataset"]
@@ -266,6 +268,7 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
     
 
     for b in [(i)+(round_number*B) for i in range(1,B+1)]:
+       #print(f"Memory before model {b}: {process.memory_info().rss / 1e9:.2f} GB")
         np.random.seed(b)  # different seed each time
         
         # sample indices with replacement
@@ -315,8 +318,7 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
         "coverage_rate_test": coverage_rate_test,  
         "status": status,
         })
-
-
+        #print(f"Memory after model {b}: {process.memory_info().rss / 1e9:.2f} GB")
 
 
     return all_models
@@ -358,7 +360,7 @@ if __name__ == "__main__":
     cfg = filtered_experiments[args.local_id]
 
     #print(f"Running configuration: {cfg}")
-    results = run_one_bootsrap_batch(cfg, round_number=cfg['round'], n_batch=10)
+    results = run_one_bootsrap_batch(cfg, round_number=cfg['round'], n_batch=100)
     
     # Save results 
     output_dir = Path.cwd() / 'bootstrap_results'
