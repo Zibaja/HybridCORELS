@@ -3,6 +3,7 @@ paper/__pycache__/
 paper/analysis/__pycache__/
 paper/local_config.py
 paper/results_1/
+paper/bootstrap_results
 paper/test.ipynb
 paper/plots/
 .eggs/*
