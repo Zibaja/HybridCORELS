@@ -49,7 +49,7 @@ Raw results for Section 5.2 (*Exploring the Pre-Black-Box Paradigm*) are provide
 Raw results for Section 5.3 (*Tradeoffs and Comparison with the State of the Art*) are provided within `paper/results_part_4.zip`.
 Raw results for the Appendix C.2 (*HybridCORELSPre,NoCollab: Empirical Evaluation*) are provided within `paper/results_part_3.zip`.
 
-Folder `examples` contains example uses of our different methods. The `example_HybridCORELSPre.py` script trains a `HybridCORELSPreClassifier`, displays it and evaluates it on a test set. The `example_HybridCORELSPost_pretrained_black_box.py` (respectively, `example_HybridCORELSPost.py`) script does the same using a `HybridCORELSPostClassifier` with a given pretrained black-box model (respectively, with no given pretrained black-box).
+Folder `examples` contains example uses of our different methods. The `example_HybridCORELSPre.py` script trains a `HybridCORELSPreClassifier`, displays it and evaluates it on a test set. The `example_HybridCORELSPost_pretrained_black_box.py` (respectively, `example_HybridCORELSPost.py`) script does the same using a `HybridCORELSPostClassifier` with a given pretrained black-box model (respectively, with no given pretrained black-box). Fairness-style coverage-disparity examples are also provided in `example_HybridCORELSPre_sensitive.py`, `example_HybridCORELSPost_sensitive.py`, and `example_HybridCORELSPost_sensitive_multigroup.py`.
 
 **IMPORTANT: in the `data` folders (within `./examples` or `./paper`) the only dataset ready to use is `compas_mined.csv`.
 For Adult and ACS Employment, the rules must first be mined from the raw datasets before experiments can be run.
@@ -83,6 +83,44 @@ Example Hybrid Model learnt on the COMPAS dataset using HybridCORELSPre (minimum
 
 This minimal example also works replacing `HybridCORELSPreClassifier` by `HybridCORELSPostClassifier`, to learn hybrid interpretable models using the *Post-Black-Box* paradigm.
 
+## Coverage Disparity Constraint (`max_coverage_disparity`)
+
+HybridCORELS now supports an additional hard constraint controlling transparency disparity across sensitive groups.
+
+New API parameters:
+
+* `max_coverage_disparity`: maximum allowed gap between the highest and lowest group coverage.
+* `sensitive_train` (argument of `.fit(...)`): sensitive-group information on the training set.
+
+Accepted `sensitive_train` formats:
+
+* Binary sensitive attribute: a 1D binary vector of shape `(n_samples,)`.
+* Multiple sensitive groups: a 2D binary membership matrix with shape `(n_samples, n_groups)` (or transposed as `(n_groups, n_samples)`).
+
+Important requirements:
+
+* Sensitive groups must form a partition of the training set (each training example belongs to exactly one group).
+* At least two non-empty groups are required.
+* The disparity constraint is enforced together with `min_coverage` during prefix search.
+
+Minimal usage example:
+
+```python
+hyb_model = HybridCORELSPostClassifier(
+    min_coverage=0.8,
+    max_coverage_disparity=0.10,
+    max_card=1,
+)
+
+hyb_model.fit(
+    X_train,
+    y_train,
+    sensitive_train=sensitive_groups,
+    features=features,
+    prediction_name=prediction,
+)
+```
+
 ## Detail of the Methods' Hyperparameters
 
 ### `HybridCORELSPreClassifier`
@@ -99,6 +137,8 @@ This minimal example also works replacing `HybridCORELSPreClassifier` by `Hybrid
         we recommend to set beta < 1/n_samples <= c (default: 0.0)
 
 * **min_coverage**: float (between 0.0 and 1.0), minimum acceptable value for the hybrid model transparency (proportion of examples classified by the interpretable part of the model) (default 0.0 (i.e., no constraint))
+
+* **max_coverage_disparity**: float (between 0.0 and 1.0), maximum acceptable disparity between the most-covered and least-covered sensitive groups. Requires providing `sensitive_train` to `.fit(...)` (default 1.0 (i.e., no disparity constraint)).
 
 * Arguments of the original CORELS algorithm (see [PyCORELS documentation](https://github.com/corels/pycorels/blob/master/corels/corels.py) for more details)
     * **c**: regularization coefficient for sparsity ($\lambda$) (default: 0.001)
@@ -126,6 +166,11 @@ This minimal example also works replacing `HybridCORELSPreClassifier` by `Hybrid
 
 * **prediction_name** : string, optional(default="prediction")
     The name of the feature that is being predicted.
+
+* **sensitive_train** : array-like, optional(default=None)
+    Sensitive-group specification on the training set, used with `max_coverage_disparity`.
+    Accepted formats are a 1D binary vector `(n_samples,)` (binary attribute),
+    or a 2D binary group-membership matrix `(n_samples, n_groups)` / `(n_groups, n_samples)`.
 
 * **time_limit** : int, maximum number of seconds allowed for the model building 
 (this timeout considers only the interpretable part building using the modified CORELS algorithm).
@@ -225,6 +270,8 @@ If it is already trained, this must be indicated using the **bb_pretrained** par
 
 * **min_coverage**: float (between 0.0 and 1.0), minimum acceptable value for the hybrid model transparency (proportion of examples classified by the interpretable part of the model) (default 0.0 (i.e., no constraint))
 
+* **max_coverage_disparity**: float (between 0.0 and 1.0), maximum acceptable disparity between the most-covered and least-covered sensitive groups. Requires providing `sensitive_train` to `.fit(...)` (default 1.0 (i.e., no disparity constraint)).
+
 * Arguments of the original CORELS algorithm (see [PyCORELS documentation](https://github.com/corels/pycorels/blob/master/corels/corels.py) for more details)
     * **c**: regularization coefficient for sparsity ($\lambda$) (default: 0.001)
     * **n_iter**: maximum number of nodes in the prefix tree (default: 10**7) - because we now offer precise control over the memory use we suggest to set this parameter to a very high value and control the memory use using the `memory_limit` argument of the `.fit()` method
@@ -251,6 +298,11 @@ If it is already trained, this must be indicated using the **bb_pretrained** par
 
 * **prediction_name** : string, optional(default="prediction")
     The name of the feature that is being predicted.
+
+* **sensitive_train** : array-like, optional(default=None)
+    Sensitive-group specification on the training set, used with `max_coverage_disparity`.
+    Accepted formats are a 1D binary vector `(n_samples,)` (binary attribute),
+    or a 2D binary group-membership matrix `(n_samples, n_groups)` / `(n_groups, n_samples)`.
 
 * **time_limit** : int, maximum number of seconds allowed for the model building 
 (this timeout considers only the interpretable part building using the modified CORELS algorithm).
