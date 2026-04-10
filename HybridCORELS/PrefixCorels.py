@@ -96,8 +96,8 @@ class PrefixCorelsPreClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, c=0.01, n_iter=10000, map_type="prefix", policy="lower_bound",
-                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, 
-                 min_coverage=0.0, obj_mode='no_collab'):
+                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0,
+                 min_coverage=0.0, max_coverage_disparity=1.0, obj_mode='no_collab'):
         self.c = c
         self.n_iter = n_iter
         self.map_type = map_type
@@ -108,10 +108,11 @@ class PrefixCorelsPreClassifier:
         self.min_support = min_support
         self.beta=beta
         self.min_coverage = min_coverage
+        self.max_coverage_disparity = max_coverage_disparity
         self.obj_mode = obj_mode
         self.status = 3
 
-    def fit(self, X, y, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
+    def fit(self, X, y, sensitive_groups=None, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
         """
         Build a CORELS classifier from the training set (X, y).
 
@@ -173,6 +174,10 @@ class PrefixCorelsPreClassifier:
             raise TypeError("self.beta name must be a float, got: " + str(type(self.beta)))
         if not isinstance(self.min_coverage, float): # Min_Coverage is a new parameter for HybridCORELS (controlling the minimum coverage needed)
             raise TypeError("self.min_coverage name must be a float, got: " + str(type(self.min_coverage)))
+        if not isinstance(self.max_coverage_disparity, float):
+            raise TypeError("max_coverage_disparity must be a float, got: " + str(type(self.max_coverage_disparity)))
+        if self.max_coverage_disparity < 0.0 or self.max_coverage_disparity > 1.0:
+            raise ValueError("max_coverage_disparity must be between 0.0 and 1.0, got: " + str(self.max_coverage_disparity))
         if not isinstance(self.obj_mode, str):
             raise TypeError("obj_mode must be a str in {'collab', 'no_collab'}, got: ", str(self.obj_mode))
         if not self.obj_mode in ['collab', 'no_collab']:
@@ -185,6 +190,16 @@ class PrefixCorelsPreClassifier:
 
         n_samples = samples.shape[0]
         n_features = samples.shape[1]
+        if sensitive_groups is None and self.max_coverage_disparity < 1.0:
+            raise ValueError("sensitive_groups must be provided when max_coverage_disparity < 1.0")
+        if sensitive_groups is None:
+            sensitive_groups = np.empty((n_samples, 0), dtype=np.uint8)
+        sensitive_groups = np.asarray(sensitive_groups)
+        if sensitive_groups.ndim != 2:
+            raise ValueError("sensitive_groups must be a 2D array of shape (n_samples, n_groups)")
+        if sensitive_groups.shape[0] != n_samples:
+            raise ValueError("sensitive_groups sample count mismatch: expected %d, got %d" % (n_samples, sensitive_groups.shape[0]))
+        sensitive_groups = check_array(sensitive_groups, ndim=2)
         if self.obj_mode == 'no_collab': # if no collab, obj is different and we need to compute additional structures here
             inconsistent_groups_indices, inconsistent_groups_min_card, inconsistent_groups_max_card = compute_inconsistent_groups(X, y)
         else:
@@ -265,6 +280,8 @@ class PrefixCorelsPreClassifier:
                              bb_errors,
                              self.max_card, self.min_support, verbose, mine_verbose, minor_verbose,
                              self.c, policy_id, map_id, self.ablation, False, self.beta, self.min_coverage,
+                             self.max_coverage_disparity,
+                             sensitive_groups.astype(np.uint8, copy=False),
                              inconsistent_groups_indices.astype(np.int64, copy=False), 
                              inconsistent_groups_min_card.astype(np.int64, copy=False), 
                              inconsistent_groups_max_card.astype(np.int64, copy=False))
@@ -436,7 +453,11 @@ class PrefixCorelsPreClassifier:
             "verbosity": self.verbosity,
             "ablation": self.ablation,
             "max_card": self.max_card,
-            "min_support": self.min_support
+            "min_support": self.min_support,
+            "beta": self.beta,
+            "min_coverage": self.min_coverage,
+            "max_coverage_disparity": self.max_coverage_disparity,
+            "obj_mode": self.obj_mode,
         }
 
     def set_params(self, **params):
@@ -651,7 +672,8 @@ class PrefixCorelsPostClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, c=0.01, n_iter=10000, map_type="prefix", policy="lower_bound",
-                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0):
+                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0,
+                 min_coverage=0.0, max_coverage_disparity=1.0):
         self.c = c
         self.n_iter = n_iter
         self.map_type = map_type
@@ -662,9 +684,10 @@ class PrefixCorelsPostClassifier:
         self.min_support = min_support
         self.beta=beta
         self.min_coverage = min_coverage
+        self.max_coverage_disparity = max_coverage_disparity
         self.status = 3
 
-    def fit(self, X, y, bb_errors, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
+    def fit(self, X, y, bb_errors, sensitive_groups=None, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
         """
         Build a CORELS classifier from the training set (X, y).
 
@@ -729,6 +752,10 @@ class PrefixCorelsPostClassifier:
             raise TypeError("self.beta name must be a float, got: " + str(type(self.beta)))
         if not isinstance(self.min_coverage, float): # Min_Coverage is a new parameter for HybridCORELS (controlling the minimum coverage needed)
             raise TypeError("self.min_coverage name must be a float, got: " + str(type(self.min_coverage)))
+        if not isinstance(self.max_coverage_disparity, float):
+            raise TypeError("max_coverage_disparity must be a float, got: " + str(type(self.max_coverage_disparity)))
+        if self.max_coverage_disparity < 0.0 or self.max_coverage_disparity > 1.0:
+            raise ValueError("max_coverage_disparity must be between 0.0 and 1.0, got: " + str(self.max_coverage_disparity))
 
         label = check_array(y, ndim=1)
         labels = np.stack([ np.invert(label), label ])
@@ -742,6 +769,16 @@ class PrefixCorelsPostClassifier:
 
         n_samples = samples.shape[0]
         n_features = samples.shape[1]
+        if sensitive_groups is None and self.max_coverage_disparity < 1.0:
+            raise ValueError("sensitive_groups must be provided when max_coverage_disparity < 1.0")
+        if sensitive_groups is None:
+            sensitive_groups = np.empty((n_samples, 0), dtype=np.uint8)
+        sensitive_groups = np.asarray(sensitive_groups)
+        if sensitive_groups.ndim != 2:
+            raise ValueError("sensitive_groups must be a 2D array of shape (n_samples, n_groups)")
+        if sensitive_groups.shape[0] != n_samples:
+            raise ValueError("sensitive_groups sample count mismatch: expected %d, got %d" % (n_samples, sensitive_groups.shape[0]))
+        sensitive_groups = check_array(sensitive_groups, ndim=2)
         # Below: for code compatibility (as cpp and cython are shared for both approaches)
         inconsistent_groups_indices, inconsistent_groups_min_card, inconsistent_groups_max_card = np.asarray([]), np.asarray([]), np.asarray([])
         #print(inconsistent_groups_indices, inconsistent_groups_min_card, inconsistent_groups_max_card)
@@ -818,6 +855,8 @@ class PrefixCorelsPostClassifier:
                              bb_errors.astype(np.uint8, copy=False),
                              self.max_card, self.min_support, verbose, mine_verbose, minor_verbose,
                              self.c, policy_id, map_id, self.ablation, False, self.beta, self.min_coverage,
+                             self.max_coverage_disparity,
+                             sensitive_groups.astype(np.uint8, copy=False),
                              inconsistent_groups_indices.astype(np.int64, copy=False), 
                              inconsistent_groups_min_card.astype(np.int64, copy=False), 
                              inconsistent_groups_max_card.astype(np.int64, copy=False))
@@ -989,7 +1028,10 @@ class PrefixCorelsPostClassifier:
             "verbosity": self.verbosity,
             "ablation": self.ablation,
             "max_card": self.max_card,
-            "min_support": self.min_support
+            "min_support": self.min_support,
+            "beta": self.beta,
+            "min_coverage": self.min_coverage,
+            "max_coverage_disparity": self.max_coverage_disparity,
         }
 
     def set_params(self, **params):

@@ -23,6 +23,9 @@ int* inconsistent_groups_min_card;
 int* inconsistent_groups_max_card;
 int nb_incons_groups;
 rule_t* black_box_errors;
+rule_t* sensitive_groups;
+int n_sensitive_groups;
+double max_group_coverage_disparity;
 
 /*
  * Performs incremental computation on a node, evaluating the bounds and inserting into the cache,
@@ -34,7 +37,7 @@ rule_t* black_box_errors;
  */
 void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned short, DataStruct::Tree> parent_prefix,
         VECTOR parent_not_captured, Queue* q, PermutationMap* p) {
-    VECTOR captured, captured_zeros, not_captured, not_captured_zeros, not_captured_equivalent, remaining_black_box_errors;
+    VECTOR captured, captured_zeros, not_captured, not_captured_zeros, not_captured_equivalent, remaining_black_box_errors, not_captured_sensitive;
     int num_captured, c0, c1, captured_correct;
     int num_not_captured, d0, d1, default_correct, num_not_captured_equivalent, parent_errors, num_remaining_black_box_errors;
     bool prediction, default_prediction;
@@ -54,6 +57,7 @@ void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned s
     rule_vinit(nsamples, &not_captured);
     rule_vinit(nsamples, &not_captured_zeros);
     rule_vinit(nsamples, &not_captured_equivalent);
+    rule_vinit(nsamples, &not_captured_sensitive);
     int i, len_prefix;
     len_prefix = parent->depth() + 1;
     parent_lower_bound = parent->lower_bound();
@@ -132,6 +136,25 @@ void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned s
         logger->addToObjTime(time_diff(t2));
         logger->incObjNum();
         bool support_ok = ((double)num_not_captured/(double)nsamples) < (1.0 - tree->min_coverage());
+        bool disparity_ok = true;
+        if (n_sensitive_groups > 0) {
+            double min_group_coverage = 1.0;
+            double max_group_coverage = 0.0;
+            for (int g = 0; g < n_sensitive_groups; g++) {
+                int not_captured_in_group = 0;
+                int group_size = sensitive_groups[g].support;
+                rule_vand(not_captured_sensitive, not_captured, sensitive_groups[g].truthtable, nsamples, &not_captured_in_group);
+                double group_coverage = 1.0 - ((double)not_captured_in_group / (double)group_size);
+                if (group_coverage < min_group_coverage) {
+                    min_group_coverage = group_coverage;
+                }
+                if (group_coverage > max_group_coverage) {
+                    max_group_coverage = group_coverage;
+                }
+            }
+            double disparity = max_group_coverage - min_group_coverage;
+            disparity_ok = disparity <= max_group_coverage_disparity + 1e-12;
+        }
         // (**)
         if (tree->has_minority()) { 
             if(black_box_errors == nullptr){ // interpr-then-bb-training
@@ -169,7 +192,7 @@ void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned s
             
         }
         // equivalent_minority = 0;
-        if (objective < tree->min_objective() && support_ok) {
+        if (objective < tree->min_objective() && support_ok && disparity_ok) {
             if (verbosity.count("progress")) {
                 printf("min(objective): %1.5f -> %1.5f, length: %d, cache size: %zu, lower bound: %1.5f\n",
                    tree->min_objective(), objective, len_prefix, tree->num_nodes(), lower_bound);
@@ -226,6 +249,7 @@ void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned s
     rule_vfree(&not_captured);
     rule_vfree(&not_captured_zeros);
     rule_vfree(&not_captured_equivalent);
+    rule_vfree(&not_captured_sensitive);
 
     logger->addToRuleEvalTime(time_diff(t0));
     logger->incRuleEvalNum();
@@ -250,7 +274,8 @@ static double start = 0.0;
  * The queue can be ordered by DFS, BFS, or an alternative priority metric (e.g. lower bound).
  */
 void bbound_begin(CacheTree* tree, Queue* q, rule_t* bb_errors, int* inconsistent_groups_indices_c, 
-                  int* inconsistent_groups_min_card_c, int* inconsistent_groups_max_card_c, int nb_incons_groups_c) {
+                  int* inconsistent_groups_min_card_c, int* inconsistent_groups_max_card_c, int nb_incons_groups_c,
+                  rule_t* sensitive_groups_c, int n_sensitive_groups_c, double max_coverage_disparity_c) {
     start = timestamp();
     num_iter = 0;
     rule_vinit(tree->nsamples(), &captured);
@@ -276,6 +301,9 @@ void bbound_begin(CacheTree* tree, Queue* q, rule_t* bb_errors, int* inconsisten
     //if(black_box_errors != nullptr)
     //    std::cout << "c++ computed bb error rate = " << (double)count_ones_vector(black_box_errors[1].truthtable, tree->nsamples()) / (double) tree->nsamples() << std::endl;
     nb_incons_groups = nb_incons_groups_c;
+    sensitive_groups = sensitive_groups_c;
+    n_sensitive_groups = n_sensitive_groups_c;
+    max_group_coverage_disparity = max_coverage_disparity_c;
 }
 
 void bbound_loop(CacheTree* tree, Queue* q, PermutationMap* p) {

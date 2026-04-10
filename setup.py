@@ -2,7 +2,6 @@ from setuptools import setup, Extension
 from setuptools.command.build_ext import build_ext
 import os
 import sys
-#from Cython.Build import cythonize # uncomment to recythonize
 
 
 class build_numpy(build_ext):
@@ -22,6 +21,9 @@ def install(gmp):
         version = f.read().strip()
 
     pyx_file = 'HybridCORELS/_prefix_corels.pyx'
+    cpp_file = 'HybridCORELS/_prefix_corels.cpp'
+    recythonize = os.environ.get('HYBRIDCORELS_RECYTHONIZE', '0') == '1'
+    use_pyx_source = recythonize or not os.path.exists(cpp_file)
 
     source_dir = 'HybridCORELS/src/corels/src/'
     sources = ['utils.cpp', 'rulelib.cpp', 'run.cpp', 'pmap.cpp', 
@@ -30,8 +32,9 @@ def install(gmp):
     for i in range(len(sources)):
         sources[i] = source_dir + sources[i]
     
-    sources.append('HybridCORELS/_prefix_corels.cpp') # comment to recythonize
-    #sources.append(pyx_file) # uncomment to recythonize
+    # Build from generated C++ when available; fall back to .pyx if the generated file is missing.
+    # Set HYBRIDCORELS_RECYTHONIZE=1 to force regeneration from .pyx.
+    sources.append(pyx_file if use_pyx_source else cpp_file)
     sources.append('HybridCORELS/src/utils.cpp')
 
     cpp_args = ['-Wall', '-O3', '-std=c++11']
@@ -57,8 +60,14 @@ def install(gmp):
                 extra_compile_args = cpp_args)
 
     extensions = [extension]
-    #extensions = cythonize(extensions) # uncomment to recythonize
-    #extensions[0].sources.append(pyx_file)
+    if use_pyx_source:
+        try:
+            from Cython.Build import cythonize
+        except ImportError as exc:
+            raise ImportError(
+                "Building from _prefix_corels.pyx requires Cython to be installed"
+            ) from exc
+        extensions = cythonize(extensions)
 
     numpy_version = 'numpy'
 

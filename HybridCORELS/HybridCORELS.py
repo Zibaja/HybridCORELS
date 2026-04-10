@@ -1,6 +1,6 @@
 from .PrefixCorels import PrefixCorelsPreClassifier
 from .PrefixCorels import PrefixCorelsPostClassifier
-from .utils import check_consistent_length, check_array, get_feature, check_in, check_features
+from .utils import check_consistent_length, check_array, get_feature, check_in, check_features, format_sensitive_attributes
 import numpy as np
 
 
@@ -43,7 +43,8 @@ class HybridCORELSPreClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, black_box_classifier=None, c=0.001, n_iter=10**7, map_type="prefix", policy="lower_bound",
-                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, alpha=0.0, min_coverage=0.0, random_state=42, obj_mode='collab'):
+                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, alpha=0.0,
+                 min_coverage=0.0, max_coverage_disparity=1.0, random_state=42, obj_mode='collab'):
         # Retrieve parameters related to CORELS, and creation of the interpretable part of the Hybrid model
         self.c = c
         self.n_iter = n_iter
@@ -56,8 +57,22 @@ class HybridCORELSPreClassifier:
         self.beta = beta
         self.alpha = alpha
         self.min_coverage=min_coverage
+        self.max_coverage_disparity = max_coverage_disparity
         self.obj_mode = obj_mode
-        self.interpretable_part = PrefixCorelsPreClassifier(self.c, self.n_iter, self.map_type, self.policy, self.verbosity, self.ablation, self.max_card, self.min_support, self.beta, self.min_coverage, self.obj_mode)
+        self.interpretable_part = PrefixCorelsPreClassifier(
+            self.c,
+            self.n_iter,
+            self.map_type,
+            self.policy,
+            self.verbosity,
+            self.ablation,
+            self.max_card,
+            self.min_support,
+            self.beta,
+            self.min_coverage,
+            self.max_coverage_disparity,
+            self.obj_mode,
+        )
         np.random.seed(random_state)
         # Creation of the black-box part of the Hybrid model
         if black_box_classifier is None:
@@ -93,7 +108,7 @@ class HybridCORELSPreClassifier:
         else:
             return loaded_object
 
-    def fit(self, X, y, features=[], prediction_name="prediction", specialization_auto_tuning=False, time_limit = None, memory_limit=None):
+    def fit(self, X, y, sensitive_train=None, features=[], prediction_name="prediction", specialization_auto_tuning=False, time_limit = None, memory_limit=None):
         """
         Build a CORELS classifier from the training set (X, y).
 
@@ -127,10 +142,22 @@ class HybridCORELSPreClassifier:
         -------
         self : obj
         """
+        if sensitive_train is None and self.max_coverage_disparity < 1.0:
+            raise ValueError("sensitive_train must be provided when max_coverage_disparity < 1.0")
+        n_samples = np.asarray(y).shape[0]
+        sensitive_groups = format_sensitive_attributes(sensitive_train, n_samples)
         # 1) Fit the interpretable part of the Hybrid model
         if "hybrid" in self.verbosity:
             print("Fitting the interpretable part...")
-        self.interpretable_part.fit(X, y, features, prediction_name, time_limit=time_limit, memory_limit=memory_limit)
+        self.interpretable_part.fit(
+            X,
+            y,
+            sensitive_groups=sensitive_groups,
+            features=features,
+            prediction_name=prediction_name,
+            time_limit=time_limit,
+            memory_limit=memory_limit,
+        )
 
         # 2) Fit the black-box part of the Hybrid model (using examples not determined by the interpretable part)
         # Retrieve only examples not captured by the interpretable part
@@ -458,7 +485,8 @@ class HybridCORELSPostClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, black_box_classifier=None, c=0.001, n_iter=10**7, map_type="prefix", policy="lower_bound",
-                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0, random_state=42, bb_pretrained=False):
+                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0,
+                 min_coverage=0.0, max_coverage_disparity=1.0, random_state=42, bb_pretrained=False):
         # Retrieve parameters related to CORELS, and creation of the interpretable part of the Hybrid model
         self.c = c
         self.n_iter = n_iter
@@ -470,8 +498,21 @@ class HybridCORELSPostClassifier:
         self.min_support = min_support
         self.beta = beta
         self.min_coverage=min_coverage
+        self.max_coverage_disparity = max_coverage_disparity
         self.bb_pretrained=bb_pretrained
-        self.interpretable_part = PrefixCorelsPostClassifier(self.c, self.n_iter, self.map_type, self.policy, self.verbosity, self.ablation, self.max_card, self.min_support, self.beta, self.min_coverage)
+        self.interpretable_part = PrefixCorelsPostClassifier(
+            self.c,
+            self.n_iter,
+            self.map_type,
+            self.policy,
+            self.verbosity,
+            self.ablation,
+            self.max_card,
+            self.min_support,
+            self.beta,
+            self.min_coverage,
+            self.max_coverage_disparity,
+        )
         np.random.seed(random_state)
         
         # Creation of the black-box part of the Hybrid model
@@ -515,7 +556,7 @@ class HybridCORELSPostClassifier:
         else:
             return loaded_object
 
-    def fit(self, X, y, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
+    def fit(self, X, y, sensitive_train=None, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
         """
         Build a CORELS classifier from the training set (X, y).
 
@@ -547,6 +588,10 @@ class HybridCORELSPostClassifier:
         -------
         self : obj
         """
+        if sensitive_train is None and self.max_coverage_disparity < 1.0:
+            raise ValueError("sensitive_train must be provided when max_coverage_disparity < 1.0")
+        n_samples = np.asarray(y).shape[0]
+        sensitive_groups = format_sensitive_attributes(sensitive_train, n_samples)
         # 1) (if not pretrained) Fit the black-box part of the Hybrid model
         if not self.bb_pretrained:
             if "hybrid" in self.verbosity:
@@ -560,7 +605,16 @@ class HybridCORELSPostClassifier:
         # 2) Fit the interpretable part of the model
         if "hybrid" in self.verbosity:
             print("Fitting the interpretable part...")
-        self.interpretable_part.fit(X, y, bb_errors, features, prediction_name, time_limit=time_limit, memory_limit=memory_limit)
+        self.interpretable_part.fit(
+            X,
+            y,
+            bb_errors,
+            sensitive_groups=sensitive_groups,
+            features=features,
+            prediction_name=prediction_name,
+            time_limit=time_limit,
+            memory_limit=memory_limit,
+        )
 
         interpretable_predictions = self.interpretable_part.predict(X)
         not_captured_indices = np.where(interpretable_predictions == 2)

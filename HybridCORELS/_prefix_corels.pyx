@@ -34,7 +34,9 @@ cdef extern from "src/corels/src/run.h":
                       int map_type, int ablation, int calculate_size, int nrules, int nlabels,
                       int nsamples, rule_t* rules, rule_t* labels, rule_t* bb_errors, rule_t* meta, int freq, char* log_fname,
                       PermutationMap*& pmap, CacheTree*& tree, Queue*& queue, double& init,
-                      set[string]& verbosity, double beta, double min_coverage, int* inconsistent_groups_indices_c, 
+                      set[string]& verbosity, double beta, double min_coverage, double max_coverage_disparity,
+                      rule_t* sensitive_groups, int n_sensitive_groups,
+                      int* inconsistent_groups_indices_c,
                       int* inconsistent_groups_min_card_c, int* inconsistent_groups_max_card_c, int nb_incons_groups_c)
 
     int run_corels_loop(size_t max_num_nodes, PermutationMap* pmap, CacheTree* tree, Queue* queue)
@@ -237,8 +239,10 @@ cdef _free_vector(rule_t* vs, int count):
 cdef rule_t* rules = NULL
 cdef rule_t* labels_vecs = NULL
 cdef rule_t* bb_errors_vecs = NULL
+cdef rule_t* sensitive_groups_vecs = NULL
 cdef rule_t* minor = NULL
 cdef int n_rules = 0
+cdef int n_sensitive_groups = 0
 cdef PermutationMap* pmap = NULL
 cdef CacheTree* tree = NULL
 cdef Queue* queue = NULL
@@ -258,6 +262,8 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
              int max_card, double min_support, verbosity_str, int mine_verbose,
              int minor_verbose, double c, int policy, int map_type, int ablation,
              int calculate_size, double beta, double min_coverage,
+             double max_coverage_disparity,
+             np.ndarray[np.uint8_t, ndim=2] sensitive_groups,
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_indices, 
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_min_card, 
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_max_card):
@@ -269,6 +275,8 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
     global inconsistent_groups_min_card_c
     global inconsistent_groups_max_card_c
     global bb_errors_vecs
+    global sensitive_groups_vecs
+    global n_sensitive_groups
 
     nsamples = samples.shape[0]
 
@@ -291,6 +299,29 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
 
     cdef int nfeatures = 0
     cdef rule_t* samples_vecs = _to_vector(samples, &nfeatures)
+
+    cdef int sensitive_group_count = sensitive_groups.shape[1]
+    cdef int nsamples_chk_sensitive = 0
+    cdef np.ndarray[np.uint8_t, ndim=2] sensitive_groups_t
+    if sensitive_group_count == 0:
+        if sensitive_groups_vecs != NULL:
+            _free_vector(sensitive_groups_vecs, n_sensitive_groups)
+            sensitive_groups_vecs = NULL
+        n_sensitive_groups = 0
+    else:
+        if sensitive_groups_vecs != NULL:
+            _free_vector(sensitive_groups_vecs, n_sensitive_groups)
+            sensitive_groups_vecs = NULL
+        n_sensitive_groups = sensitive_group_count
+        sensitive_groups_t = np.ascontiguousarray(sensitive_groups.T)
+        try:
+            sensitive_groups_vecs = _to_vector(sensitive_groups_t, &nsamples_chk_sensitive)
+        except:
+            print("An error occured while allocating memory for sensitive groups. Exiting!")
+            raise MemoryError()
+        if nsamples_chk_sensitive != nsamples:
+            print("An error occured while allocating memory for sensitive groups: sample count mismatch between nsamples = ", nsamples, " and allocated size = ", nsamples_chk_sensitive)
+            raise MemoryError()
 
     n_incons = inconsistent_groups_indices.size
     cdef int nb_incons_group_c = n_incons
@@ -448,7 +479,8 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
     
     cdef int rb = run_corels_begin(c, verbosity, policy, map_type, ablation, calculate_size,
                    n_rules, 2, nsamples, rules, labels_vecs, bb_errors_vecs, minor, 0, NULL, pmap, tree,
-                   queue, init, run_verbosity, beta, min_coverage,    
+                   queue, init, run_verbosity, beta, min_coverage, max_coverage_disparity,
+                   sensitive_groups_vecs, n_sensitive_groups,
                    inconsistent_groups_indices_c, inconsistent_groups_min_card_c, inconsistent_groups_max_card_c, nb_incons_group_c)
 
     if rb == -1:
@@ -458,6 +490,10 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
         if bb_errors_vecs != NULL:
             _free_vector(bb_errors_vecs, 2)
             bb_errors_vecs = NULL
+        if sensitive_groups_vecs != NULL:
+            _free_vector(sensitive_groups_vecs, n_sensitive_groups)
+            sensitive_groups_vecs = NULL
+            n_sensitive_groups = 0
         if minor != NULL:
             _free_vector(minor, 1)
             minor = NULL
@@ -489,6 +525,8 @@ def fit_wrap_end(int early):
     global minor
     global n_rules
     global bb_errors_vecs
+    global sensitive_groups_vecs
+    global n_sensitive_groups
 
     cdef vector[int] rulelist
     cdef vector[int] classes
@@ -528,11 +566,15 @@ def fit_wrap_end(int early):
             _free_vector(rules, n_rules)
         if bb_errors_vecs != NULL:
             _free_vector(bb_errors_vecs, 2)
+        if sensitive_groups_vecs != NULL:
+            _free_vector(sensitive_groups_vecs, n_sensitive_groups)
 
     minor = NULL
     rules = NULL
     labels_vecs = NULL
     bb_errors_vecs = NULL
+    sensitive_groups_vecs = NULL
+    n_sensitive_groups = 0
     n_rules = 0
 
     return r_out

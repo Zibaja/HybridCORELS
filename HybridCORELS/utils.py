@@ -142,6 +142,54 @@ def check_features(features):
         if not isinstance(features[i], str):
             raise TypeError("Each feature much be a string, got: " + str(type(features[i])))
 
+
+def format_sensitive_attributes(sensitive_train, n_samples):
+    """Normalize sensitive attribute inputs to a boolean membership matrix.
+
+    Accepted formats:
+    - 1D binary vector of shape (n_samples,) for a binary attribute.
+    - 2D binary matrix with one row/column per group membership vector.
+      Supported orientations: (n_samples, n_groups) or (n_groups, n_samples).
+    """
+    if sensitive_train is None:
+        return np.empty((n_samples, 0), dtype=np.bool_)
+
+    sensitive = np.asarray(sensitive_train)
+    if sensitive.ndim == 1:
+        if sensitive.shape[0] != n_samples:
+            raise ValueError("Sensitive attribute vector length mismatch: expected %d, got %d" % (n_samples, sensitive.shape[0]))
+        sensitive_binary = check_array(sensitive, ndim=1).astype(np.uint8)
+        # Binary attribute values induce two protected groups.
+        group0 = np.invert(sensitive_binary.astype(np.bool_))
+        group1 = sensitive_binary.astype(np.bool_)
+        groups = np.stack([group0, group1], axis=1)
+    elif sensitive.ndim == 2:
+        if sensitive.shape[0] == n_samples:
+            groups = check_array(sensitive, ndim=2)
+        elif sensitive.shape[1] == n_samples:
+            groups = check_array(sensitive.T, ndim=2)
+        else:
+            raise ValueError(
+                "Sensitive attribute matrix must have one dimension equal to n_samples=%d, got %s"
+                % (n_samples, str(sensitive.shape))
+            )
+    else:
+        raise ValueError("Sensitive attributes must be either a 1D vector or a 2D matrix, got ndim=%d" % sensitive.ndim)
+
+    if groups.shape[1] < 2:
+        raise ValueError("At least two protected groups are required to compute coverage disparity")
+
+    group_sizes = np.sum(groups, axis=0)
+    if np.any(group_sizes == 0):
+        raise ValueError("Each protected group must contain at least one example")
+
+    # Groups represent disjoint sensitive values; each sample belongs to exactly one group.
+    memberships_per_sample = np.sum(groups, axis=1)
+    if not np.all(memberships_per_sample == 1):
+        raise ValueError("Sensitive groups must form a partition of the training set (exactly one group per sample)")
+
+    return groups.astype(np.bool_)
+
 def check_rulelist(rl):
     if not hasattr(rl, "rules") or not hasattr(rl, "features") or not hasattr(rl, "prediction_name"):
         raise ValueError("Rulelist must have the following attributes: 'rules', 'features', 'prediction_name'")

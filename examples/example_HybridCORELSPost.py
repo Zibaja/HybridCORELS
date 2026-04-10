@@ -33,7 +33,7 @@ hyb_model = HybridCORELSPostClassifier(black_box_classifier=bbox,
 # Train the hybrid model
 # Set resources used to train the prefix (interpretable part of the hybrid model)
 t_limit = 60 # Seconds
-m_limit = 4000 # MB
+m_limit = 2000 # MB
 hyb_model.fit(X_train, y_train, features=features, prediction_name=prediction, time_limit=t_limit, memory_limit=m_limit)
 
 print("Status = ", hyb_model.get_status()) # Indicates whether the training was performed to optimality or if any other ending condition was reached
