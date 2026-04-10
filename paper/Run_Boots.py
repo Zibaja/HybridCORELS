@@ -209,6 +209,7 @@ def run_one_model(time_limit, model_key, tradeoff_value,bootstrap_id, X, y,X_val
     if model_key in ['HybridCORELSPreClassifier','HybridCORELSPostClassifier']:
         rules = tuple([i['antecedents'][0]-1 for i in model.interpretable_part.rl().rules][:-1] )#last one is the default rule, so I remove it
         status = model.get_status()
+        print("status of CORELS is : ", status)
         
     elif model_key== 'HyRS':
         pos_rules = tuple(sorted(model.positive_rule_set))
@@ -382,7 +383,7 @@ if __name__ == "__main__":
     results = run_one_bootsrap_batch(cfg, round_number=cfg['round'], n_batch=100)
     
     # Save results 
-    output_dir = Path.cwd() / 'boot_test' ###############bootstrap_results
+    output_dir = Path.cwd() / 'bootstrap_results' 
     output_dir.mkdir(exist_ok=True)
     output_file = output_dir / (
     f"{cfg['dataset']}_"
@@ -393,6 +394,8 @@ if __name__ == "__main__":
 
     with open(output_file, "wb") as f:
         pickle.dump(results, f)
+
+ 
 
     
     

@@ -22,5 +22,5 @@ python Run_Boots.py \
     --model HybridCORELSPreClassifier \
     --seed 0 \
     --round_min 0 \
-    --round_max 0 \
+    --round_max 4 \
     --local_id $SLURM_ARRAY_TASK_ID
