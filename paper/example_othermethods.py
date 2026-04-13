@@ -53,15 +53,15 @@ print(f"Train Coverage is {np.mean (preds_types_train)}")
 preds_test, preds_types_test = hyb_model.predict_with_type(df_X["test"])
 print(f"Test Coverage is {np.mean (preds_types_test)}")
 print(X["train"].shape)
-# fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
-# fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
-# print(fairness_value)
-# fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
-# fairness_value = fairness.compute_fairness(preds_types_train, complement= True)['percentage_interpretable']
-# print(fairness_value)
-# fairness = FairnessMeasure(X["train"], features, ['neg_Gender=Male'])
-# fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
-# print(fairness_value)
+fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
+fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
+print(fairness_value)
+fairness = FairnessMeasure(X["train"], features, ['Gender=Male'])
+fairness_value = fairness.compute_fairness(preds_types_train, complement= True)['percentage_interpretable']
+print(fairness_value)
+fairness = FairnessMeasure(X["train"], features, ['neg_Gender=Male'])
+fairness_value = fairness.compute_fairness(preds_types_train, complement= False)['percentage_interpretable']
+print(fairness_value)
 
 
 
