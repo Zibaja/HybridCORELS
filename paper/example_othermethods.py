@@ -7,6 +7,7 @@ from exp_utils import get_data_norulemining, to_df, FairnessMeasure
 from HyRS import HybridRuleSetClassifier
 from companion_rule_list import CRL
 
+import time
 
 """This script is to check other method like HyRS and CRL
 """
@@ -38,7 +39,7 @@ hparams = {
 hyb_model = HybridRuleSetClassifier(bbox, **hparams)
 
 # Train the hybrid model
-hyb_model.fit(df_X["train"], y["train"], 100, T0=0.01, premined_rules=True, 
+hyb_model.fit(df_X["train"], y["train"], 10**7, T0=0.01, premined_rules=True, #50000
                                             random_state=3, time_limit=10)
 
 print(hyb_model.get_description(df_X["test"], y["test"]))
@@ -65,6 +66,7 @@ print(X["train"].shape)
 
 
 print("--------------- CRL ---------------\n")
+start_time = time.perf_counter()
 # Set parameters
 hparams = {
     "max_card" : 2,
@@ -76,7 +78,7 @@ hyb_model = CRL(bbox, **hparams)
 
 # Train the hybrid model
 hyb_model.fit(df_X["train"], y["train"], n_iteration=50000,random_state=random_state_param+1, 
-                                                            premined_rules=True, time_limit=20)
+                                                            premined_rules=True, time_limit=300)
 print(hyb_model.get_description(df_X["test"], y["test"]))
 
 
@@ -99,7 +101,9 @@ print("Rule usage:", np.mean(pred_type == 1))
 print("number of points sent to rulelist:", np.sum(pred_type == 1),'All points:', len(pred_type))
 
 print(f'overall train accuracy {np.mean(y_pred == y["train"])}')
-
+end_time = time.perf_counter()
+duration = end_time - start_time
+print(f"Executed in {duration:.4f} seconds")
 print(50*'-')
 
 output_rules, rule_coverage, acc = hyb_model.test(df_X["train"], y["train"])

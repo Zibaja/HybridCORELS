@@ -83,7 +83,7 @@ ESTIMATORS = {
             "alpha": 0.001,
             "beta": [0.001, 0.00215443, 0.00464159, 0.01, 0.02154435,
                         0.04641589, 0.1, 0.21544347, 0.46415888, 1.0], #changed from 0.02 to 0.1 
-            "n_iteration": 50000, 
+            "n_iteration": 10**7, 
             "T0": 0.01,
         },
     },
@@ -105,7 +105,7 @@ ESTIMATORS = {
             "max_card": 2,
             "alpha": [0.001, 0.0016681, 0.00278256, 0.00464159, 0.00774264,
                         0.0129155,0.02154435, 0.03593814, 0.05994843, 0.1], ##I think 0.01 is better 
-            "n_iteration": 50000,#50000
+            "n_iteration": 10**7,#50000
         },
     },
 }
@@ -288,6 +288,11 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
     tradeoff_value = cfg[tradeoff_param]
     seed = cfg["seed"] #test/train split seed
 
+    if model_key in ["HyRS","CRL"]:
+        time_limit = 180
+    else:
+        time_limit = 300
+  
     np.random.seed(seed)
     
     #split information
@@ -305,9 +310,10 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
 
 
     #run a model over whole training data
-    model_0 =run_one_model(time_limit=300, model_key=model_key, tradeoff_value=tradeoff_value,\
-                   bootstrap_id=0, X={"train":df_X["train"], "test":df_X["test"]} if model_key in ["HyRS","CRL"] else X,\
-                    y=y, X_val= df_X["train"] if model_key in ["HyRS","CRL"] else X["train"],y_val=y["train"],features=features, prediction=prediction, seed=seed, round_number=round_number)
+    model_0 =run_one_model(time_limit = time_limit , model_key=model_key, tradeoff_value=tradeoff_value,\
+                            bootstrap_id=0, X={"train":df_X["train"], "test":df_X["test"]} if model_key in ["HyRS","CRL"] else X,\
+                                y=y, X_val= df_X["train"] if model_key in ["HyRS","CRL"] else X["train"],y_val=y["train"],\
+                                features=features, prediction=prediction, seed=seed, round_number=round_number)
                     
 
     all_models = []
@@ -329,7 +335,7 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
 
 
         df_X_boot = {'train': pd.DataFrame(X_boot['train'], columns=features), 'test': df_X['test']}
-        model_boot = run_one_model(time_limit=300, model_key=model_key, tradeoff_value=tradeoff_value,\
+        model_boot = run_one_model(time_limit = time_limit, model_key=model_key, tradeoff_value=tradeoff_value,\
                    bootstrap_id=b, X = df_X_boot if model_key in ["HyRS","CRL"] else X_boot,\
                     y= y_boot, X_val=df_X['train'] if model_key in ["HyRS","CRL"] else X["train"],y_val = y["train"],\
                     features=features, prediction=prediction, seed=seed, round_number=round_number)

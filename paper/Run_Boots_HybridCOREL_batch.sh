@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=hybridCOREL_bootstrap
-#SBATCH --array=0-49
+#SBATCH --array=0-99
 #SBATCH --time=08:00:00
 #SBATCH --mem=16G
 #SBATCH --cpus-per-task=1
@@ -18,9 +18,9 @@ mkdir -p bootstrap_results
 
 # Run script
 python Run_Boots.py \
-    --dataset compas \
+    --dataset adult \
     --model HybridCORELSPostClassifier \
     --seed 0 \
     --round_min 0 \
-    --round_max 4 \
+    --round_max 9 \
     --local_id $SLURM_ARRAY_TASK_ID
