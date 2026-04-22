@@ -7,6 +7,7 @@ import os
 from HybridCORELS import HybridCORELSPreClassifier, HybridCORELSPostClassifier
 from HyRS import HybridRuleSetClassifier
 from companion_rule_list import CRL
+import pickle
 
 
 def age_data_modification(X,features):
@@ -291,10 +292,9 @@ class FairnessMeasure():
        return float((self.set_condition().sum()/self.X.shape[0])*100)
     
     # compute of percentage of interpretable samples for the given condition
-    def compute_fairness(self, preds_types,complement = False):
+    def compute_fairness(self, preds_types):
         condition_indices = self.cond_indices
-        if complement:
-            condition_indices = np.logical_not(condition_indices)
+
         total_count = condition_indices.sum() # total number of samples satisfying the condition
         interpretable_count = preds_types[condition_indices].sum() # number of samples satisfying the condition going through the interpretable part
         percentage_interpretable = (interpretable_count / total_count) * 100 if total_count > 0 else 0
@@ -468,9 +468,9 @@ def statistics (array):
     se = np.std(array) / np.sqrt(len(array))
     return mean, std, se
 
-def paired_subgroups (subgroups):
-    return [[x, y] for i, x in enumerate(subgroups) for y in subgroups[i+1:]]
 
+def paired_subgroups (subgroups):
+    return [(x, y )for i, x in enumerate(subgroups) for y in subgroups[i+1:]]
 
 class Dataset():
     """Class representing a dataset loaded from a csv file.
@@ -644,21 +644,30 @@ class Dataset():
         return X_dict, y_dict, self.features, self.prediction
     
 
-    def demographicGroup(self):
+    def demographicGroup(self, summarized = False):
         """define demographic groups based on dataset name"""
         if self.name == 'adult':
             condition_gender = ['gender_Male', 'gender_Female']
             condition_age = ['age_low', 'age_middle', 'age_high']
-            condition_race = ['race_White', 'race_Black', 'race_Asian', 'race_other']
+            if not summarized :
+                condition_race = ['race_White', 'race_Black', 'race_Asian', 'race_other']
+            else:
+                condition_race = ['race_White', 'race_Black','other']
         if self.name == 'compas':
             condition_gender = ['Gender=Male', 'neg_Gender=Male']
             condition_age = ['Age=18-25','Age=26-29','Age>=30']
-            condition_race = ['Race=African-American', 'Race=Caucasian', 'Race=Hispanic', 'Race=Other']
+            if not summarized:
+                condition_race = ['Race=African-American', 'Race=Caucasian', 'Race=Hispanic', 'Race=Other']
+            else:
+                condition_race = ['Race=African-American', 'Race=Caucasian', 'other']
         if self.name == 'acs_employ':
             condition_gender = ['neg_Female','Female' ]
             condition_age = ['age_low','age_medium', 'age_high' ]
-            condition_race = ['White alone','Black or African American alone','Asian alone','Some Other Race alone',\
+            if not summarized :
+                condition_race = ['White alone','Black or African American alone','Asian alone','Some Other Race alone',\
                             'Two or More Races','American Indian and Alaska Native','Native Hawaiian and Other Pacific Islander alone']
+            else:
+                condition_race = ['White alone','Black or African American alone','other']
         return {'Age': condition_age,
                 'Gender': condition_gender,
                 'Race': condition_race,
@@ -698,3 +707,457 @@ class Dataset():
         return df_X
 
     
+
+class Evaluation():
+    def __init__(self,X ,features: list, condition:list, cond_indices = None):
+        """
+        This class computes evaluation metrics for a given demographic group
+        X: np.ndarray
+            it could be train or test data.
+        features: list
+            List of feature names corresponding to the columns of X.
+        condition: list
+            full List of feature names that define the a demographic subgroup. for instance , for gender we have ['male','female']
+        cond_indices : boolean matrix that involves conditions indices in shape (n_data_point, num_conditions), this is when 
+        you want to compute indices yourself not through the class
+            """
+         
+        self.X = X
+        self.features = features
+        self.condition = condition
+        self.cond_indices = self.set_condition() if not cond_indices else cond_indices
+    #slice the data based on the condition
+    def set_condition(self):  
+        
+        n = self.X.shape[0]
+        k = len(self.condition)
+        
+        condition_indices = np.zeros((n, k), dtype=bool)
+
+        # handle all "real" features
+        known_feature_mask = np.zeros(n, dtype=bool)
+
+        for i, j in enumerate(self.condition):
+            if j != 'other':
+                idx = self.features.index(j)
+                condition_indices[:, i] = (self.X[:, idx] == 1)
+
+                # keep track of union of known groups
+                known_feature_mask |= condition_indices[:, i]
+
+        # Now handle "other"
+        if 'other' in self.condition:
+            other_idx = self.condition.index('other')
+            condition_indices[:, other_idx] = ~known_feature_mask
+
+        return condition_indices
+    
+    def get_condition_freq (self):
+        return (np.sum(self.cond_indices,axis=0)/self.X.shape[0])*100
+    
+
+    def compute_fairness(self, preds_types):
+        condition_indices = self.cond_indices
+        ICF = {}
+        for i,j in enumerate(self.condition):
+            ICF[j] = float(np.mean(preds_types[condition_indices[:,i]] == 1))
+
+        return ICF
+    
+
+    def confusion_matrix(self, pred, y_true, pred_types, cond_indices = None):
+        """This fucntions return the confusion matrix for each condition 
+        and for both interpretable and black box part
+
+        Args:
+            pred (numpy array): output prediction
+            y_true (numpy array): target label
+            pred_types (numpy array): an array that shows if an instance is interpreted by rule list or by the BB
+            cond_indices (numpy array): indices of instaces of a subgroup
+            detailed (bool, optional): True if a detailed confusion matrix per interpretable and BB is wanted. Defaults to False.
+        """
+        if not cond_indices:
+            cond_indices = self.cond_indices
+        CM = {} # confusion matrix for all conditions
+        for i,j in enumerate(self.condition):
+            CM [j] = {'T': {  # interpretable
+                'TN': int(np.sum((y_true[cond_indices[:,i]]==pred[cond_indices[:,i]]) & (y_true[cond_indices[:,i]]==0) 
+                                    & (pred_types[cond_indices[:,i]]==1))),
+                'FP': int(np.sum((y_true[cond_indices[:,i]]!=pred[cond_indices[:,i]]) & (pred[cond_indices[:,i]]==1)
+                                    & (pred_types[cond_indices[:,i]]==1))),
+                'FN': int(np.sum((y_true[cond_indices[:,i]]!=pred[cond_indices[:,i]]) & (pred[cond_indices[:,i]]==0)
+                                    & (pred_types[cond_indices[:,i]]==1))),
+                'TP': int(np.sum((y_true[cond_indices[:,i]]==pred[cond_indices[:,i]])
+                                    & (y_true[cond_indices[:,i]]==1)& (pred_types[cond_indices[:,i]]==1))),},
+                'B': {  # black-box
+                    'TN': int(np.sum((y_true[cond_indices[:,i]]==pred[cond_indices[:,i]]) & (y_true[cond_indices[:,i]]==0) 
+                                    & (pred_types[cond_indices[:,i]]==0))),
+                    'FP': int(np.sum((y_true[cond_indices[:,i]]!=pred[cond_indices[:,i]]) & (pred[cond_indices[:,i]]==1)
+                                    & (pred_types[cond_indices[:,i]]==0))),
+                    'FN': int(np.sum((y_true[cond_indices[:,i]]!=pred[cond_indices[:,i]]) & (pred[cond_indices[:,i]]==0)
+                                    & (pred_types[cond_indices[:,i]]==0))),
+                    'TP': int(np.sum((y_true[cond_indices[:,i]]==pred[cond_indices[:,i]])
+                                    & (y_true[cond_indices[:,i]]==1)& (pred_types[cond_indices[:,i]]==0))),
+                }}
+
+    
+        return CM
+    
+    def compute_true_pos_ratio (self, consfusion_matrix):
+        """This function calulates the TPR ratio for all given subgroups
+
+        Args:
+            data (numpy array):  
+
+        Returns:
+            dict: a dictionary with all conditions as key 
+        """
+        TPR = {cond:{} for cond in self.condition}
+
+        for cond in self.condition: #this is for all conditions in data
+            TPR_overal = (consfusion_matrix[cond]['T']['TP']+consfusion_matrix[cond]['B']['TP'])
+            FN_overall = (consfusion_matrix[cond]['T']['FN']+consfusion_matrix[cond]['B']['FN'])
+            if (TPR_overal+FN_overall) == 0 :
+                TPR[cond]['TPR_overal']= 0
+            else: 
+                TPR[cond]['TPR_overal'] = (TPR_overal)/(TPR_overal+FN_overall)
+            if (consfusion_matrix[cond]['T']['TP']+consfusion_matrix[cond]['T']['FN'])==0:
+                TPR[cond]['TPR_T'] = 0
+            else:
+                TPR[cond]['TPR_T'] = (consfusion_matrix[cond]['T']['TP'])/(consfusion_matrix[cond]['T']['TP']+consfusion_matrix[cond]['T']['FN'])
+            if (consfusion_matrix[cond]['B']['TP']+consfusion_matrix[cond]['B']['FN'])==0:
+                TPR[cond]['TPR_B']= 0
+            else:
+                TPR[cond]['TPR_B'] = (consfusion_matrix[cond]['B']['TP'])/(consfusion_matrix[cond]['B']['TP']+consfusion_matrix[cond]['B']['FN'])
+
+        return TPR
+    
+    def compute_pred_pos_ratio(self, consfusion_matrix):
+        """This function calulates the PPR ratio for all given subgroups
+
+        Args:
+            consfusion_matrix : CM for all conditions
+
+        Returns:
+            dict: a dictionary with all conditions as key 
+        """
+        PPR = {cond:{} for cond in self.condition}
+        group_freq = np.sum(self.cond_indices, axis=0)
+        
+        for i,cond in enumerate(self.condition): #this is for all conditions in data
+            PPR_overall = (consfusion_matrix[cond]['T']['TP']+consfusion_matrix[cond]['B']['TP'])+(consfusion_matrix[cond]['T']['FP']+consfusion_matrix[cond]['B']['FP'])
+            PPR[cond]['PPR_overal'] = PPR_overall / group_freq[i]
+            PPR[cond]['PPR_T'] = ((consfusion_matrix[cond]['T']['TP'])+(consfusion_matrix[cond]['T']['FP']))/ group_freq[i]
+            PPR[cond]['PPR_B'] = ((consfusion_matrix[cond]['B']['TP'])+(consfusion_matrix[cond]['B']['FP']))/ group_freq[i]
+        
+        return PPR
+    
+    def compute_Equal_Opportunity(self, TPR, model_part='TPR_overal' ) :
+        """ this function calculte the EO for all paires of groups within a demographic group like age, gender...
+            given the condition , this function outputs max disparity and paired signed disparity
+
+            model_part =  TPR_T for transparent part only, TPR_B for BB only and TPR_overal for overall
+        """
+        all_pairs = paired_subgroups (self.condition)
+        EO = {}
+        for i,j in all_pairs:
+            EO[(i,j)] = TPR[i][model_part]-TPR[j][model_part]
+        EO['over_all_groups'] = max([TPR[i][model_part] for i in self.condition]) - min([TPR[i][model_part] for i in self.condition])
+                
+        return EO
+    
+
+    def compute_Statistical_Parity (self, PPR, model_part='PPR_overal' ):
+        """This function canlculates the difference between PPR of all pairs of groups and max gap overall
+        """
+        all_pairs = paired_subgroups (self.condition)
+        SP = {}
+        for i,j in all_pairs:
+            SP[(i,j)] = PPR[i][model_part]-PPR[j][model_part]
+        SP['over_all_groups'] = max([PPR[i][model_part] for i in self.condition]) - min([PPR[i][model_part] for i in self.condition])
+                
+        return SP
+    
+    def compute_ICF_disparity (self, ICF):
+        all_pairs = paired_subgroups (self.condition)
+        ICF_disparity = {}
+        for i,j in all_pairs:
+            ICF_disparity[(i,j)] = ICF[i]-ICF[j]
+        ICF_disparity['over_all_groups'] = max([ICF[i] for i in self.condition])-min([ICF[i] for i in self.condition])
+        return ICF_disparity
+
+def Rashomon_set(Dataset_name, method, seeed_split, tradeoff_value,epsilon,result_dir ):
+    """This fuction provides the Rashomon set including unique models within epsilon tolerance
+    from the best model with max accuracy. This function reads all models
+    from the result directory for a given dataset, method, seed and tradeoff value and 
+    then returns the Rashomon set, all unique models without epsilon filter and the best model.
+    The provided Rashomon set is based on each tradeoff values
+
+    Args:
+        Dataset_name (_type_): _description_
+        method (_type_): _description_
+        seeed_split (_type_): _description_
+        tradeoff_value (_type_): _description_
+        epsilon (_type_): _description_
+        result_dir (_type_): _description_
+
+    Returns:
+        tuple: espsilon rashomon set, all unique model without epsilon filter, best_model
+    """
+    all_models = []
+    for f in result_dir.iterdir():
+        if Dataset_name in f.name and method in f.name and f"seed{seeed_split}" in f.name and f.name.endswith(f"param{tradeoff_value}.pkl"):
+            with open(f, "rb") as f:
+                one_round = pickle.load(f)
+                all_models.extend(one_round)
+    num_bootstraps = len([i for i in all_models if i['bootstrap_id']!=0])
+    # print(f"Total number of bootstraps is {num_bootstraps}")
+    max_acc = max([i['acc_train'] for i in all_models])
+    best_model = max(all_models, key=lambda x: x['acc_train'])
+
+    unique_preds = set()
+    unique_models = []
+    epsilon_rashomon = []
+    for i in all_models:
+        model_key = (i['rules'], i['preds_types_train'].tobytes(), i['preds_train'].tobytes())
+        if model_key not in unique_preds:
+            unique_preds.add(model_key)  
+            unique_models.append(i.copy())
+            if i['acc_train'] >= (1-epsilon) * max_acc - 1e-12: #floating point precision
+                epsilon_rashomon.append(i.copy())
+
+    
+    return epsilon_rashomon, unique_models, best_model
+        
+
+def Rashomon_set_given_models(epsilon,all_models):
+    """This fuction provides the Rashomon set including unique models within epsilon tolerance
+    from the best model with max accuracy. This fucntion receives a list of models and an epsilon value 
+    and returns the Rashomon set, all unique models without epsilon filter and the best model.
+
+    Args:
+        epsilon (_type_): _description_
+        all_models (_type_): _description_
+
+    Returns:
+        tuple: espsilon rashomon set, all unique model without epsilon filter, best_model
+    """
+    if len(all_models) == 0:
+        return [], [], None
+    max_acc = max([i['acc_train'] for i in all_models])
+    best_model = max(all_models, key=lambda x: x['acc_train'])
+
+    unique_preds = set()
+    unique_models = []
+    epsilon_rashomon = []
+    for i in all_models:
+        model_key = (i['rules'], i['preds_types_train'].tobytes(), i['preds_train'].tobytes())
+        if model_key not in unique_preds:
+            unique_preds.add(model_key)  
+            unique_models.append(i.copy())
+            if i['acc_train'] >= (1-epsilon) * max_acc - 1e-12: #floating point precision
+                epsilon_rashomon.append(i.copy())
+
+    
+    return epsilon_rashomon, unique_models, best_model
+
+
+def generate_quantiles_data_driven (Dataset_name, method,result_dir, seed = 0,n_quantiles = 4 ):
+    """ This function reads all models from the result directory for a given dataset, 
+    method and seed and then returns a dictionary of models assigned to quantiles 
+    based on their coverage values. 
+    The function also returns the quantile thresholds used for the assignment.
+
+    Args:
+        Dataset_name (_type_): name of the dataset for which the models are read
+        method (_type_): name of the method for which the models are read
+        result_dir (_type_): directory where the results pickle files are stored
+        seed (int, optional):  Defaults to 0.
+        n_quantiles (int, optional): Defaults to 4.
+
+    Returns:
+        _type_: all models assigned to quantiles and the quantile thresholds
+    """
+    # Load models
+    all_models = []
+    seeed_split = seed
+    for f in result_dir.iterdir():
+        if Dataset_name in f.name and method in f.name and f"seed{seeed_split}" in f.name:
+            with open(f, "rb") as file:
+                one_round = pickle.load(file)
+                all_models.extend(one_round)
+
+    # Extract coverage values
+    coverage_values = np.array([m['coverage_rate_train'] for m in all_models])
+
+    # Compute quantile thresholds
+    quantile_edges = np.linspace(0, 1, n_quantiles + 1)
+    quantiles = np.quantile(coverage_values, quantile_edges)
+
+    # Initialize dictionary
+    all_models_per_quantiles = {f"q{i+1}": [] for i in range(n_quantiles)}
+
+    # Assign models to bins
+    for model in all_models:
+        val = model['coverage_rate_train']
+        
+        # Find the correct bin
+        for i in range(n_quantiles):
+            lower = quantiles[i]
+            upper = quantiles[i + 1]
+            
+            # Include right edge only for last bin
+            if (i < n_quantiles - 1 and lower <= val < upper) or \
+            (i == n_quantiles - 1 and lower <= val <= upper):
+                all_models_per_quantiles[f"q{i+1}"].append(model)
+                break
+
+    # Print summary
+    for key, models in all_models_per_quantiles.items():
+        if len(models) == 0:
+            continue
+        coverages = [m['coverage_rate_train'] for m in models]
+        accuracies = [m['acc_train'] for m in models]
+        
+        print(f"{key}:")
+        print(f"  number of models: {len(models)}")
+        print(f"  mean coverage: {np.mean(coverages):.4f}")
+        print(f"  mean accuracy: {np.mean(accuracies):.4f}")
+
+    return all_models_per_quantiles, quantiles
+
+
+
+
+def generate_quantiles(Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None):
+    """
+    Assign models to FIXED coverage bins (global bins for comparability).
+    """
+
+    # -------------------------------
+    # Load models
+    # -------------------------------
+    all_models = []
+    for f in result_dir.iterdir():
+        if Dataset_name in f.name and method in f.name and f"seed{seed}" in f.name:
+            with open(f, "rb") as file:
+                one_round = pickle.load(file)
+                all_models.extend(one_round)
+
+    # -------------------------------
+    # Define bins (GLOBAL)
+    # -------------------------------
+    if bins is not None:
+        quantiles = np.array(bins)
+    else:
+        quantiles = np.linspace(0, 1, n_quantiles + 1)
+
+    n_quantiles = len(quantiles) - 1
+
+    # -------------------------------
+    # Initialize dictionary
+    # -------------------------------
+    all_models_per_quantiles = {f"q{i+1}": [] for i in range(n_quantiles)}
+
+    # -------------------------------
+    # Assign models to bins
+    # -------------------------------
+    for model in all_models:
+        val = model['coverage_rate_train']
+
+        for i in range(n_quantiles):
+            lower = quantiles[i]
+            upper = quantiles[i + 1]
+
+            if (i < n_quantiles - 1 and lower <= val < upper) or \
+               (i == n_quantiles - 1 and lower <= val <= upper):
+                all_models_per_quantiles[f"q{i+1}"].append(model)
+                break
+        # Print summary
+    for key, models in all_models_per_quantiles.items():
+        if len(models) == 0:
+            continue
+        coverages = [m['coverage_rate_train'] for m in models]
+        accuracies = [m['acc_train'] for m in models]
+        
+        print(f"{key}:")
+        print(f"  number of models: {len(models)}")
+        print(f"  mean coverage: {np.mean(coverages):.4f}")
+        print(f"  mean accuracy: {np.mean(accuracies):.4f}")
+
+    return all_models_per_quantiles, quantiles
+
+
+
+def generate_quantiles_Rashomon (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None, epsilon=0.01):
+
+    # -------------------------------
+    # Load all models for each dataset and method and seed
+    # -------------------------------
+    all_models = []
+    for f in result_dir.iterdir():
+        if Dataset_name in f.name and method in f.name and f"seed{seed}" in f.name:
+            with open(f, "rb") as file:
+                one_round = pickle.load(file)
+                all_models.extend(one_round)
+
+    # -------------------------------
+    # Define bins (GLOBAL)
+    # -------------------------------
+    if bins is not None:
+        quantiles = np.array(bins)
+    else:
+        quantiles = np.linspace(0, 1, n_quantiles + 1)
+
+    n_quantiles = len(quantiles) - 1
+
+    #find all the uniqe models first
+    unique_preds = set()
+    unique_models = []
+   
+    for i in all_models:
+        model_key = (i['rules'], i['preds_types_train'].tobytes(), i['preds_train'].tobytes())
+        if model_key not in unique_preds:
+            unique_preds.add(model_key)  
+            unique_models.append(i.copy()) #generate all unique models first and then assign them to quantiles
+
+    unique_models_per_quantiles = {f"q{i+1}": [] for i in range(n_quantiles)}
+
+    # -------------------------------
+    # Assign models to bins
+    # -------------------------------
+    for model in unique_models:
+        val = model['coverage_rate_train']
+
+        for i in range(n_quantiles):
+            lower = quantiles[i]
+            upper = quantiles[i + 1]
+
+            if (i < n_quantiles - 1 and lower <= val < upper) or \
+                (i == n_quantiles - 1 and lower <= val <= upper):
+                unique_models_per_quantiles[f"q{i+1}"].append(model)
+                break
+        # Print summary
+    # for key, models in unique_models_per_quantiles.items():
+    #     if len(models) == 0:
+    #         continue
+    #     coverages = [m['coverage_rate_train'] for m in models]
+    #     accuracies = [m['acc_train'] for m in models]
+
+    #     print(f"{key}:")
+    #     print(f"  number of models: {len(models)}")
+    #     print(f"  mean coverage: {np.mean(coverages):.4f}")
+    #     print(f"  mean accuracy: {np.mean(accuracies):.4f}")
+
+    # Now apply epsilon filter to find the epsilon Rashomon set for each quantile
+    epsilon_rashomon_per_quantile = {f"q{i+1}": [] for i in range(n_quantiles)}
+    for q in unique_models_per_quantiles.keys():
+        max_acc = max([i['acc_train'] for i in unique_models_per_quantiles[q]])
+        best_model = max(unique_models_per_quantiles[q], key=lambda x: x['acc_train'])
+        for i in unique_models_per_quantiles[q]:
+            if i['acc_train'] >= (1-epsilon) * max_acc - 1e-12: #floating point precision
+                epsilon_rashomon_per_quantile[q].append(i.copy())
+
+
+    return epsilon_rashomon_per_quantile, unique_models_per_quantiles, quantiles
+

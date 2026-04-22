@@ -15,6 +15,7 @@ from HyRS import HybridRuleSetClassifier
 from companion_rule_list import CRL
 import argparse
 import pickle
+import subprocess
 
 
 # ===============================
@@ -31,9 +32,10 @@ ESTIMATORS = {
             alpha=h["alpha"],
             min_coverage=h["min_coverage"],
             obj_mode='collab',
+            max_coverage_disparity = h["max_coverage_disparity"] ,
             **h["corels_params"]
         ),
-        "fit": lambda model, X, y, h: model.fit(X, y, features=h["features"],
+        "fit": lambda model, X, y,sensitive, h: model.fit(X, y,sensitive, features=h["features"],
                                                                 prediction_name=h['prediction_name'], time_limit=h["time_limit"],
                                                                 memory_limit=h["memory_limit"]),
         "hparams": {
@@ -41,7 +43,8 @@ ESTIMATORS = {
             "lambdaValue" : 0.001,
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
             "memory_limit": 8000,
-            "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95]
+            "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95],
+            "max_coverage_disparity": 0.05
         },
     },
 
@@ -52,16 +55,18 @@ ESTIMATORS = {
             c = h["lambdaValue"],
             min_coverage=h["min_coverage"],
             bb_pretrained=False,
+            max_coverage_disparity = h["max_coverage_disparity"] ,
             **h["corels_params"]
         ),
-        "fit": lambda model, X, y, h: model.fit(X, y, features=h["features"],
+        "fit": lambda model, X, y,sensitive, h: model.fit(X, y,sensitive, features=h["features"],
                                                                 prediction_name=h['prediction_name'], time_limit=h["time_limit"],
                                                                 memory_limit=h["memory_limit"]),
         "hparams": {
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
             "lambdaValue" : 0.001,
             "memory_limit": 8000,
-            "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95]
+            "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95],
+            "max_coverage_disparity": 0.05
         },
     },
 
@@ -114,7 +119,7 @@ ESTIMATORS = {
 CORELS_PARAMS = {
     "policy": "objective",
     "max_card": 1,
-    "n_iter": 10**9,
+    "n_iter": 10**5, ## just change to be fast 10**9
     'min_support':0.05,
     "verbosity": ["hybrid"],
 }
@@ -163,7 +168,10 @@ for dataset in DATASETS:
 # print(len(EXPERIMENTS))
 
 
-
+# ===============================
+# Sensitive Groups Information
+# ===============================
+groups = ['Gender', 'Race', 'Age']
 
 
 ##############################
@@ -172,13 +180,9 @@ for dataset in DATASETS:
 
 ###############################
 
-# import psutil
-# import os
-
-# process = psutil.Process(os.getpid())
 
 
-def run_one_model(time_limit, model_key, tradeoff_value,bootstrap_id, X, y,X_val,y_val, features, prediction, seed, round_number):
+def run_one_model(time_limit, model_key, tradeoff_value,bootstrap_id, X, y,X_val,y_val, features, prediction, seed, round_number, sensitive):
 
     # Fit a black-box
     bbox = RandomForestClassifier(random_state=bootstrap_id, min_samples_leaf=10, max_depth=10)
@@ -204,7 +208,7 @@ def run_one_model(time_limit, model_key, tradeoff_value,bootstrap_id, X, y,X_val
 
     #Build and fit the model over whole training data
     model = spec["build"](bbox, h)
-    spec["fit"](model, X["train"], y["train"], h)
+    spec["fit"](model, X["train"], y["train"],sensitive, h) #sensitive: sensitive_train
 
     if model_key in ['HybridCORELSPreClassifier','HybridCORELSPostClassifier']:
         rules = tuple([i['antecedents'][0]-1 for i in model.interpretable_part.rl().rules][:-1] )#last one is the default rule, so I remove it
@@ -281,7 +285,7 @@ def run_one_model(time_limit, model_key, tradeoff_value,bootstrap_id, X, y,X_val
 
     return results
 
-def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
+def run_one_bootsrap_batch(cfg,round_number,sensitive ,n_batch=100):
     dataset_name = cfg["dataset"]
     model_key = cfg["model"]
     tradeoff_param = TRADEOFF_PARAM[model_key]
@@ -308,12 +312,21 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
     #convert numpy arrays to dataframes for HyRS and CRL
     df_X = my_data.to_df_from_dict(X)
 
+    #extract sensitive groups information
+    conditions = my_data.demographicGroup(summarized=True)[sensitive]
+    eval_train = Evaluation(X['train'], features, conditions)
+    sensitive_train = (eval_train.cond_indices).astype(np.uint8)
+    # eval_test = Evaluation(X['test'], features, conditions)
+    # sensitive_test = (eval_test.cond_indices).astype(np.uint8)
+    
+
+
 
     #run a model over whole training data
     model_0 =run_one_model(time_limit = time_limit , model_key=model_key, tradeoff_value=tradeoff_value,\
                             bootstrap_id=0, X={"train":df_X["train"], "test":df_X["test"]} if model_key in ["HyRS","CRL"] else X,\
                                 y=y, X_val= df_X["train"] if model_key in ["HyRS","CRL"] else X["train"],y_val=y["train"],\
-                                features=features, prediction=prediction, seed=seed, round_number=round_number)
+                                features=features, prediction=prediction, seed=seed, round_number=round_number, sensitive= sensitive_train)
                     
 
     all_models = []
@@ -332,13 +345,13 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
         indices = np.random.choice(n, size=n, replace=True)
         X_boot = {"train": X['train'][indices], "test": X["test"]} 
         y_boot = {"train": y['train'][indices], "test": y["test"]}
-
+        sensitive_boot_train =  sensitive_train[indices]
 
         df_X_boot = {'train': pd.DataFrame(X_boot['train'], columns=features), 'test': df_X['test']}
         model_boot = run_one_model(time_limit = time_limit, model_key=model_key, tradeoff_value=tradeoff_value,\
                    bootstrap_id=b, X = df_X_boot if model_key in ["HyRS","CRL"] else X_boot,\
                     y= y_boot, X_val=df_X['train'] if model_key in ["HyRS","CRL"] else X["train"],y_val = y["train"],\
-                    features=features, prediction=prediction, seed=seed, round_number=round_number)
+                    features=features, prediction=prediction, seed=seed, round_number=round_number, sensitive=sensitive_boot_train)
         
         
         all_models.extend(model_boot)
@@ -351,16 +364,68 @@ def run_one_bootsrap_batch(cfg,round_number, n_batch=100):
 
 
 
-if __name__ == "__main__":
+
+
+
+LOC_PATH = Path.home()/'programming'/'optimization'/'HybridCorels-julien'/'HybridCORELS'
+REM_PATH = "zibaja@nibi.alliancecan.ca:/home/zibaja/scratch"
+
+def send():
+    print("Sending project to Compute Canada...")
+    
+    cmd_str = " ".join([
+        "rsync -av",
+        "--exclude '.venv'",
+        "--exclude '__pycache__/'",
+        "--exclude '*.pyc'",
+        "--exclude '.git'",
+        "--exclude 'paper/results/'", 
+        "--exclude 'paper/results_1/'", 
+        "--exclude 'paper/plots/'", # optional
+         "--exclude 'paper/bootstrap_results/'", 
+        f"{LOC_PATH}",
+        f"{REM_PATH}"
+    ])
+    
+    subprocess.run(cmd_str, shell=True)
+
+
+def receive():
+    print("Receiving results from Compute Canada...")
+    src_path = Path.Path(REM_PATH, "HybridCORELS", "paper", "bootstrap_results/*")
+    dst_path = Path.Path(LOC_PATH, "paper", "Mitigation_results")
+
+    cmd_str = f"rsync -av {src_path} {dst_path}"
+    
+    subprocess.run(cmd_str, shell=True)
+
+
+def main ():
+    groups = ['Gender', 'Race', 'Age']
     parser = argparse.ArgumentParser(description='Run bootstrap experiments for one dataset, model, and seed.')
     parser.add_argument('--dataset', type=str, default=None)
     parser.add_argument('--model', type=str, default=None)
     parser.add_argument('--seed', type=int, default=None)
     parser.add_argument('--round_min', type=int, default=None)
     parser.add_argument('--round_max', type=int, default=None)
-    parser.add_argument('--local_id', type=int, required=True)
+    parser.add_argument('--sensitive', type=str, default=None)
+    parser.add_argument('--local_id', type=int, default=None)
 
+    parser.add_argument('--send', action='store_true', help='Sync project to Compute Canada')
+    parser.add_argument('--receive', action='store_true', help='Fetch results from Compute Canada')
+    
     args = parser.parse_args()
+
+    
+    if args.send:
+        send()
+        return
+
+    if args.receive:
+        receive()
+        return
+
+    
 
     filtered_experiments = []
 
@@ -375,22 +440,21 @@ if __name__ == "__main__":
             continue
         if args.round_max is not None and cfg["round"] > args.round_max:
             continue
-
-        
         filtered_experiments.append(cfg)
         # print(cfg, filtered_experiments.index(cfg))
      
-    
+    if args.sensitive not in groups:
+        raise ValueError(f"sensitive must be one of {groups}")
     #print(f"Total filtered jobs: {len(filtered_experiments)}")
-
+    print("number of experimnets ",len(filtered_experiments))
     cfg = filtered_experiments[args.local_id]
  
     #print(f"Running configuration: {cfg}")
-    results = run_one_bootsrap_batch(cfg, round_number=cfg['round'], n_batch=100)
+    results = run_one_bootsrap_batch(cfg, round_number=cfg['round'],sensitive=args.sensitive, n_batch=10)
     
     # Save results 
-    output_dir = Path.cwd() / 'bootstrap_results' 
-    output_dir.mkdir(exist_ok=True)
+    output_dir = Path.cwd() / 'bootstrap_results'/f'{args.sensitive}'
+    output_dir.mkdir(parents=True, exist_ok=True)
     output_file = output_dir / (
     f"{cfg['dataset']}_"
     f"{cfg['model']}_"
@@ -406,11 +470,5 @@ if __name__ == "__main__":
 
  
 
-    
-    
-
-
-
-
-
-
+if __name__ == "__main__":
+    main()
