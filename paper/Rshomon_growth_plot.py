@@ -746,9 +746,9 @@ if __name__ == '__main__':
     # Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None)
     # Rashomon_Growth_each_quantiles (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) #you can change n_quantiles 
     #Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
-    Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None)
-    # for dataset in DATASETS:
-    #     for method in ESTIMATORS.keys():
-    #         # Rashomon_Growth_all_quantiles_2 (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
-            # Rashomon_Growth_each_quantiles (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
-            #Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
+
+    for dataset in DATASETS:
+        for method in ESTIMATORS.keys():
+            # Rashomon_Growth_all_quantiles_2 (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
+            #Rashomon_Growth_each_quantiles (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
+            Rashomon_Growth_all_quantiles_sameXaxis (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None) 
