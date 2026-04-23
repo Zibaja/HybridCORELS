@@ -548,7 +548,7 @@ def Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n
 
     plt.tight_layout()
     
-    #plt.show()
+    plt.show()
 
     # --- save ---
     output_dir = Path.cwd() / 'plots'/'RS'
@@ -740,16 +740,17 @@ if __name__ == '__main__':
    # plot_error_charts('compas','HybridCORELSPostClassifier')
     #Analysis with Quantiles:
     Dataset_name = 'compas'
-    method = 'HybridCORELSPostClassifier'
+    method = 'HybridCORELSPreClassifier'
     #all_models_per_quantiles, quantiles = generate_quantiles(Dataset_name, method,result_dir, seed=0, n_quantiles=4)
     #Rashomon_Growth_for_quantiles (all_models_per_quantiles, quantiles)
     #Rashomon_Growth_All_quantiles ( all_models_per_quantiles, quantiles)
     #Second version that first generate unique models then quantile them:
     # Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None)
     # Rashomon_Growth_each_quantiles (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) #you can change n_quantiles 
-    Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
-    for dataset in DATASETS:
-        for method in ESTIMATORS.keys():
-    #         Rashomon_Growth_all_quantiles_2 (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
-    #         Rashomon_Growth_each_quantiles (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
-            Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
+    #Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
+    Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None)
+    # for dataset in DATASETS:
+    #     for method in ESTIMATORS.keys():
+    #         # Rashomon_Growth_all_quantiles_2 (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
+            # Rashomon_Growth_each_quantiles (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
+            #Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
