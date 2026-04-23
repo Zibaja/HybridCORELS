@@ -1681,7 +1681,7 @@ def max_delta_ICF_all_methods(Dataset_name,seed, result_dir, epsilon,split, demo
 
     plt.xlabel(f'Quantiles of Coverage Rate')
     plt.ylabel('Max. Interpretability Coverage Disparity')
-    plt.title(f'{Dataset_name.capitalize()}')
+    #plt.title(f'{Dataset_name.capitalize()}')
 
     labels = []
     for i in range(len(quantiles) - 1):
@@ -2173,12 +2173,12 @@ if __name__ == '__main__':
     #sparity_all_methods(Dataset_name,seed, result_dir, epsilon, n_quantiles=4, bins=None)
 
     for dataset in DATASETS:
-        individual_arbitrariness_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir,epsilon=epsilon,split=split,n_quantiles=4, bins=None)    
-        sparity_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, n_quantiles=4, bins=None)
+        # individual_arbitrariness_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir,epsilon=epsilon,split=split,n_quantiles=4, bins=None)    
+        # sparity_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, n_quantiles=4, bins=None)
         for group in groups:
             max_delta_ICF_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, n_quantiles=4, bins=None)
-            max_EO_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, model_part='TPR_overal', n_quantiles=4, bins=None)
-            max_SP_all_methods (Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, model_part='PPR_overal', n_quantiles=4, bins=None)
-            for method in ESTIMATORS:
-                comprehensive_ICF_plot_2_axis_quantiles(Dataset_name=dataset, method=method, seed=seed, result_dir=result_dir, n_quantiles=4 ,epsilon=0.01,bins=None,split='train', demographic_group=group)
+            # max_EO_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, model_part='TPR_overal', n_quantiles=4, bins=None)
+            # max_SP_all_methods (Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, model_part='PPR_overal', n_quantiles=4, bins=None)
+            # for method in ESTIMATORS:
+            #     comprehensive_ICF_plot_2_axis_quantiles(Dataset_name=dataset, method=method, seed=seed, result_dir=result_dir, n_quantiles=4 ,epsilon=0.01,bins=None,split='train', demographic_group=group)
 
