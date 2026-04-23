@@ -494,7 +494,7 @@ def Rashomon_Growth_All_quantiles (all_models_per_quantiles, quantiles):
     output_dir = Path.cwd() / 'plots'/'RS'
     output_dir.mkdir(exist_ok=True)
     output_file = output_dir / f"RS_{Dataset_name}_{method}_all_quantiles.png"
-    # plt.savefig(output_file, bbox_inches="tight")
+    plt.savefig(output_file, bbox_inches="tight")
     plt.close()
 
 def Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None):
@@ -547,14 +547,12 @@ def Rashomon_Growth_all_quantiles_2 (Dataset_name, method, result_dir, seed=0, n
     fig.suptitle(f"{Dataset_name.capitalize()} | {method}", fontsize=14)
 
     plt.tight_layout()
-    
-    plt.show()
-
     # --- save ---
     output_dir = Path.cwd() / 'plots'/'RS'
     output_dir.mkdir(exist_ok=True)
     output_file = output_dir / f"RS_{Dataset_name}_{method}_all_quantiles.png"
     plt.savefig(output_file, bbox_inches="tight")
+    plt.show()
     plt.close()
 
 def Rashomon_Growth_each_quantiles (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None):
@@ -740,7 +738,7 @@ if __name__ == '__main__':
    # plot_error_charts('compas','HybridCORELSPostClassifier')
     #Analysis with Quantiles:
     Dataset_name = 'compas'
-    method = 'HybridCORELSPreClassifier'
+    method = 'HybridCORELSPostClassifier'
     #all_models_per_quantiles, quantiles = generate_quantiles(Dataset_name, method,result_dir, seed=0, n_quantiles=4)
     #Rashomon_Growth_for_quantiles (all_models_per_quantiles, quantiles)
     #Rashomon_Growth_All_quantiles ( all_models_per_quantiles, quantiles)
