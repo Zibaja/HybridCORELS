@@ -1436,8 +1436,6 @@ def sparsity (dataset_name,method,epsilon):
 
 
 
-
-
 def comprehensive_ICF_plot_2_axis_quantiles(Dataset_name,method,seed, result_dir, n_quantiles ,epsilon,bins,split, demographic_group):
 
     seed = 0 
@@ -2131,6 +2129,17 @@ def sparity_all_methods(Dataset_name,seed, result_dir, epsilon, n_quantiles, bin
     plt.close()
 
 
+################################
+#Analysis over Rashomon sets of Quantiles AFTER Mitigations
+################################
+
+#for Race 
+
+
+
+
+
+
 if __name__ == '__main__':
 
     result_dir = Path.cwd()/"bootstrap_results"
@@ -2165,16 +2174,9 @@ if __name__ == '__main__':
     #Analysis over quantiles
     #################################
     
-    #comprehensive_ICF_plot_2_axis_quantiles(Dataset_name,method,seed, result_dir, n_quantiles=4 ,epsilon=0.01,bins=None,split='train', demographic_group='Age')
-    #max_delta_ICF_all_methods(Dataset_name,seed, result_dir, epsilon,split, demographic_group='Age', n_quantiles=4, bins=None)
-    #max_EO_all_methods(Dataset_name,seed, result_dir, epsilon,split, demographic_group='Age', model_part='TPR_overal', n_quantiles=4, bins=None)
-    #max_SP_all_methods (Dataset_name,seed, result_dir, epsilon,split, demographic_group='Age', model_part='PPR_overal', n_quantiles=4, bins=None)
-    #individual_arbitrariness_all_methods(Dataset_name,seed, result_dir,epsilon,split,n_quantiles=4, bins=None)
-    #sparity_all_methods(Dataset_name,seed, result_dir, epsilon, n_quantiles=4, bins=None)
-
     for dataset in DATASETS:
         # individual_arbitrariness_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir,epsilon=epsilon,split=split,n_quantiles=4, bins=None)    
-        sparity_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, n_quantiles=4, bins=None)
+        #sparity_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, n_quantiles=4, bins=None)
         # for group in groups:
         #     max_delta_ICF_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, n_quantiles=4, bins=None)
             # max_EO_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, split=split, demographic_group=group, model_part='TPR_overal', n_quantiles=4, bins=None)
