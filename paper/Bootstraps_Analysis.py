@@ -2133,17 +2133,515 @@ def sparity_all_methods(Dataset_name,seed, result_dir, epsilon, n_quantiles, bin
 #Analysis over Rashomon sets of Quantiles AFTER Mitigations
 ################################
 
-#for Race 
+def Fair_max_delta_ICF_all_methods (Dataset_name,seed, epsilon,split, demographic_group, n_quantiles, bins=None):
+    result_dir ={'HybridCORELSPre_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPost_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPre': Path.cwd()/"bootstrap_results",
+                'HybridCORELSPost': Path.cwd()/"bootstrap_results"}
+    method_match = {'HybridCORELSPre_Fair':'HybridCORELSPreClassifier',
+                'HybridCORELSPost_Fair':'HybridCORELSPostClassifier',
+                'HybridCORELSPre':'HybridCORELSPreClassifier',
+                'HybridCORELSPost':'HybridCORELSPostClassifier'}
+    seed = 0 
+    np.random.seed(seed)
+
+    train_proportion = 0.8
+
+    my_data = Dataset.from_csv(
+        Path.cwd().parent / f'examples/data/{Dataset_name}_mined.csv',
+        Dataset_name
+    )
+    my_data.pre_process()
+
+    X, y, features, prediction = my_data.get_data_norulemining(
+        {"train": train_proportion, "test": 1-train_proportion},
+        random_state_param=seed)
+    color_map = {
+        'HybridCORELSPre_Fair': '#1f77b4',   # strong blue
+        'HybridCORELSPost_Fair': '#ff7f0e',  # strong orange
+        'HybridCORELSPre': '#aec7e8',             # light blue
+        'HybridCORELSPost': '#ffbb78'             # light orange
+    }
+    plt.figure(figsize=(7, 4))
+
+    for i,j in enumerate(method_match.keys()):
+        # -------------------------------
+        # Collect Rashomon models
+        # -------------------------------
+    
+        epsilon_rashomon_per_quantile, _, quantiles = generate_quantiles_Rashomon(
+        Dataset_name, method_match[j], result_dir[j], seed=seed, n_quantiles=n_quantiles, bins=bins, epsilon=epsilon
+        )
+            # -------------------------------
+        # Compute statistics
+        # -------------------------------
+        
+        conditions = my_data.demographicGroup(summarized=True)[demographic_group]
+
+        eval = Evaluation(X[split], features, conditions)
+
+
+        all_icf_disparity_per_quantile = []
+        
+
+        for q in epsilon_rashomon_per_quantile.keys():
+            all_icf_disparity = []
+            
+
+            for model in epsilon_rashomon_per_quantile[q]:
+                ICF = eval.compute_fairness(model[f'preds_types_{split}'])
+                ICF_disparity = eval.compute_ICF_disparity(ICF)
+
+                all_icf_disparity.append(ICF_disparity['over_all_groups'])
+
+            all_icf_disparity_per_quantile.append(all_icf_disparity)
 
 
 
+        num_methods = len(method_match)
+        num_quantiles = len(epsilon_rashomon_per_quantile.keys())
+
+        base_positions = np.arange(1, num_quantiles + 1)
+
+        # dynamic spacing
+        total_width = 0.8
+        width = total_width / num_methods
 
 
+        # --- BOX PLOTS ---
+        # center all groups
+        positions = base_positions + (i - (num_methods - 1)/2) * width
+
+        box = plt.boxplot(
+            all_icf_disparity_per_quantile,
+            positions=positions,
+            widths=width * 0.9,
+            showmeans=True,
+            whis=[0, 100],
+            patch_artist=True
+        )
+
+        for patch in box['boxes']:
+            patch.set_facecolor(color_map[j])
+
+
+
+    plt.xlabel(f'Quantiles of Coverage Rate')
+    plt.ylabel('Max. Interpretability Coverage Disparity')
+    plt.title(f'{Dataset_name.capitalize()} | {demographic_group}')
+
+    labels = []
+    for i in range(len(quantiles) - 1):
+        if i < len(quantiles) - 2:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f})")
+        else:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f}]")
+
+
+    # --- LEGENDS ---
+    # boxplot legend (groups)
+    legend_elements = [
+        Patch(facecolor=color_map[method], label=method)
+        for i, method in enumerate(method_match)
+    ]
+
+    plt.legend(handles=legend_elements, loc='upper left')
+    plt.xticks(base_positions, labels)
+    plt.grid(axis='y')
+    plt.tight_layout()
+    # --- save ---
+    output_dir = Path.cwd()/'plots'/'ICF'
+    output_dir.mkdir(exist_ok=True)
+
+    output_file = output_dir / f"Fair_Max_Delta_ICF{Dataset_name}_{demographic_group}.png"
+    plt.savefig(output_file, bbox_inches="tight")
+    #plt.show()
+    plt.close()
+
+
+def Fair_max_EO_all_methods (Dataset_name,seed, epsilon,split, demographic_group, model_part, n_quantiles, bins=None):
+   
+    result_dir ={'HybridCORELSPre_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPost_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPre': Path.cwd()/"bootstrap_results",
+                'HybridCORELSPost': Path.cwd()/"bootstrap_results"}
+    method_match = {'HybridCORELSPre_Fair':'HybridCORELSPreClassifier',
+                'HybridCORELSPost_Fair':'HybridCORELSPostClassifier',
+                'HybridCORELSPre':'HybridCORELSPreClassifier',
+                'HybridCORELSPost':'HybridCORELSPostClassifier'}
+
+    seed = 0 
+    np.random.seed(seed)
+
+    train_proportion = 0.8
+
+    my_data = Dataset.from_csv(
+        Path.cwd().parent / f'examples/data/{Dataset_name}_mined.csv',
+        Dataset_name
+    )
+    my_data.pre_process()
+
+    X, y, features, prediction = my_data.get_data_norulemining(
+        {"train": train_proportion, "test": 1-train_proportion},
+        random_state_param=seed)
+    color_map = {
+        'HybridCORELSPre_Fair': '#1f77b4',   # strong blue
+        'HybridCORELSPost_Fair': '#ff7f0e',  # strong orange
+        'HybridCORELSPre': '#aec7e8',             # light blue
+        'HybridCORELSPost': '#ffbb78'             # light orange
+    }
+    plt.figure(figsize=(7, 4))
+
+    for i,j in enumerate(method_match.keys()):
+        # -------------------------------
+        # Collect Rashomon models
+        # -------------------------------
+        
+        epsilon_rashomon_per_quantile, _, quantiles = generate_quantiles_Rashomon(
+        Dataset_name, method_match[j], result_dir[j], seed=seed, n_quantiles=n_quantiles, bins=bins, epsilon=epsilon
+        )
+            # -------------------------------
+        # Compute statistics
+        # -------------------------------
+        
+        conditions = my_data.demographicGroup(summarized=True)[demographic_group]
+
+        eval = Evaluation(X[split], features, conditions)
+
+        all_EO_per_quantile = []
+        for q in epsilon_rashomon_per_quantile.keys():
+
+            all_EO = []
+
+            for model in epsilon_rashomon_per_quantile[q]:
+                CM = eval.confusion_matrix(model[f'preds_{split}'],y[split],model[f'preds_types_{split}'])
+                TPR = eval.compute_true_pos_ratio(CM)
+                EO = eval.compute_Equal_Opportunity(TPR, model_part=model_part)
+                all_EO.append(EO['over_all_groups'])
+            all_EO_per_quantile.append(all_EO)
+
+        num_methods = len(method_match)
+        num_quantiles = len(epsilon_rashomon_per_quantile.keys())
+
+        base_positions = np.arange(1, num_quantiles + 1)
+
+        # dynamic spacing
+        total_width = 0.8
+        width = total_width / num_methods
+
+        # dynamic colors
+        #colors = plt.cm.tab10(np.linspace(0, 1, num_methods))
+
+
+        # --- BOX PLOTS (left axis) ---
+
+
+        # center all groups
+        positions = base_positions + (i - (num_methods - 1)/2) * width
+
+        box = plt.boxplot(
+            all_EO_per_quantile,
+            positions=positions,
+            widths=width * 0.9,
+            showmeans=True,
+            whis=[0, 100],
+            patch_artist=True
+        )
+
+        for patch in box['boxes']:
+            patch.set_facecolor(color_map[j])
+
+
+
+    plt.xlabel(f'Quantiles of Coverage Rate')
+    plt.ylabel('Max. Equal Opportunity')
+    plt.title(f'{Dataset_name.capitalize()} | {demographic_group}')
+
+    labels = []
+    for i in range(len(quantiles) - 1):
+        if i < len(quantiles) - 2:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f})")
+        else:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f}]")
+
+
+    # --- LEGENDS ---
+    from matplotlib.patches import Patch
+
+
+    # boxplot legend (groups)
+    legend_elements = [
+        Patch(facecolor=color_map[method], label=method)
+        for i, method in enumerate(method_match)
+    ]
+
+    plt.legend(handles=legend_elements, loc='upper left')
+    plt.xticks(base_positions, labels)
+    plt.grid(axis='y')
+    plt.tight_layout()
+    # --- save ---
+    output_dir = Path.cwd()/'plots'/'EO'
+    output_dir.mkdir(exist_ok=True)
+
+    output_file = output_dir / f"Fair_Max_EO{Dataset_name}_{demographic_group}.png"
+    plt.savefig(output_file, bbox_inches="tight")
+    #plt.show()
+    plt.close()
+
+
+def Fair_max_SP_all_methods (Dataset_name,seed, epsilon,split, demographic_group, model_part, n_quantiles, bins=None):
+   
+    result_dir ={'HybridCORELSPre_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPost_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPre': Path.cwd()/"bootstrap_results",
+                'HybridCORELSPost': Path.cwd()/"bootstrap_results"}
+    method_match = {'HybridCORELSPre_Fair':'HybridCORELSPreClassifier',
+                'HybridCORELSPost_Fair':'HybridCORELSPostClassifier',
+                'HybridCORELSPre':'HybridCORELSPreClassifier',
+                'HybridCORELSPost':'HybridCORELSPostClassifier'}
+
+    seed = 0 
+    np.random.seed(seed)
+
+    train_proportion = 0.8
+
+    my_data = Dataset.from_csv(
+        Path.cwd().parent / f'examples/data/{Dataset_name}_mined.csv',
+        Dataset_name
+    )
+    my_data.pre_process()
+
+    X, y, features, prediction = my_data.get_data_norulemining(
+        {"train": train_proportion, "test": 1-train_proportion},
+        random_state_param=seed)
+    color_map = {
+        'HybridCORELSPre_Fair': '#1f77b4',   # strong blue
+        'HybridCORELSPost_Fair': '#ff7f0e',  # strong orange
+        'HybridCORELSPre': '#aec7e8',             # light blue
+        'HybridCORELSPost': '#ffbb78'             # light orange
+    }
+    plt.figure(figsize=(7, 4))
+
+    for i,j in enumerate(method_match.keys()):
+        # -------------------------------
+        # Collect Rashomon models
+        # -------------------------------
+        
+        epsilon_rashomon_per_quantile, _, quantiles = generate_quantiles_Rashomon(
+        Dataset_name, method_match[j], result_dir[j], seed=seed, n_quantiles=n_quantiles, bins=bins, epsilon=epsilon
+        )
+            # -------------------------------
+        # Compute statistics
+        # -------------------------------
+        
+        conditions = my_data.demographicGroup(summarized=True)[demographic_group]
+
+        eval = Evaluation(X[split], features, conditions)
+
+        all_SP_per_quantile = []
+        for q in epsilon_rashomon_per_quantile.keys():
+
+            all_SP = []
+
+            for model in epsilon_rashomon_per_quantile[q]:
+                CM = eval.confusion_matrix(model[f'preds_{split}'],y[split],model[f'preds_types_{split}'])
+                PPR = eval.compute_pred_pos_ratio(CM)
+                SP = eval.compute_Statistical_Parity(PPR, model_part=model_part)
+                all_SP.append(SP['over_all_groups'])
+            all_SP_per_quantile.append(all_SP)
+
+        num_methods = len(method_match)
+        num_quantiles = len(epsilon_rashomon_per_quantile.keys())
+
+        base_positions = np.arange(1, num_quantiles + 1)
+
+        # dynamic spacing
+        total_width = 0.8
+        width = total_width / num_methods
+
+        # dynamic colors
+        #colors = plt.cm.tab10(np.linspace(0, 1, num_methods))
+
+
+        # --- BOX PLOTS (left axis) ---
+
+
+        # center all groups
+        positions = base_positions + (i - (num_methods - 1)/2) * width
+
+        box = plt.boxplot(
+            all_SP_per_quantile,
+            positions=positions,
+            widths=width * 0.9,
+            showmeans=True,
+            whis=[0, 100],
+            patch_artist=True
+        )
+
+        for patch in box['boxes']:
+            patch.set_facecolor(color_map[j])
+
+
+
+    plt.xlabel(f'Quantiles of Coverage Rate')
+    plt.ylabel('Max. Statistical Parity')
+    plt.title(f'{Dataset_name.capitalize()} | {demographic_group}')
+
+    labels = []
+    for i in range(len(quantiles) - 1):
+        if i < len(quantiles) - 2:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f})")
+        else:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f}]")
+
+
+    # boxplot legend (groups)
+    legend_elements = [
+        Patch(facecolor=color_map[method], label=method)
+        for i, method in enumerate(method_match)
+    ]
+
+    plt.legend(handles=legend_elements, loc='upper left')
+    plt.xticks(base_positions, labels)
+    plt.grid(axis='y')
+    plt.tight_layout()
+    # --- save ---
+    output_dir = Path.cwd()/'plots'/'SP'
+    output_dir.mkdir(exist_ok=True)
+
+    output_file = output_dir / f"Fair_Max_SP{Dataset_name}_{demographic_group}.png"
+    plt.savefig(output_file, bbox_inches="tight")
+    #plt.show()
+    plt.close()
+
+
+def Fair_Sparsity_all_methods (Dataset_name,seed, epsilon, demographic_group, n_quantiles, bins=None):
+
+    result_dir ={'HybridCORELSPre_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPost_Fair': Path.cwd()/"Mitigation_results"/demographic_group,
+                'HybridCORELSPre': Path.cwd()/"bootstrap_results",
+                'HybridCORELSPost': Path.cwd()/"bootstrap_results"}
+    method_match = {'HybridCORELSPre_Fair':'HybridCORELSPreClassifier',
+                'HybridCORELSPost_Fair':'HybridCORELSPostClassifier',
+                'HybridCORELSPre':'HybridCORELSPreClassifier',
+                'HybridCORELSPost':'HybridCORELSPostClassifier'}
+
+    seed = 0 
+    np.random.seed(seed)
+
+    train_proportion = 0.8
+
+    my_data = Dataset.from_csv(
+        Path.cwd().parent / f'examples/data/{Dataset_name}_mined.csv',
+        Dataset_name
+    )
+    my_data.pre_process()
+
+    X, y, features, prediction = my_data.get_data_norulemining(
+        {"train": train_proportion, "test": 1-train_proportion},
+        random_state_param=seed)
+    color_map = {
+        'HybridCORELSPre_Fair': '#1f77b4',   # strong blue
+        'HybridCORELSPost_Fair': '#ff7f0e',  # strong orange
+        'HybridCORELSPre': '#aec7e8',             # light blue
+        'HybridCORELSPost': '#ffbb78'             # light orange
+    }
+    plt.figure(figsize=(7, 4))
+
+    for i,j in enumerate(method_match.keys()):
+        # -------------------------------
+        # Collect Rashomon models
+        # -------------------------------
+        epsilon_rashomon_per_quantile, _, quantiles = generate_quantiles_Rashomon(
+        Dataset_name, method_match[j], result_dir[j], seed=seed, n_quantiles=n_quantiles, bins=bins, epsilon=epsilon
+        )
+            # -------------------------------
+        # Compute statistics
+        # -------------------------------
+
+        all_SP_per_quantile = []
+        for q in epsilon_rashomon_per_quantile.keys():
+
+            all_Sparsity = []
+
+            for model in epsilon_rashomon_per_quantile[q]:
+                if method_match[j]!='HyRS': #in case , I want to use it for HyRS and CRL in future
+                    all_Sparsity.append(len(model['rules'])) #for now only for HybridCOREL
+                else:
+                    pos,neg = model['rules']
+                    all_Sparsity.append(len(pos)+len(neg))
+                
+            all_SP_per_quantile.append(all_Sparsity)
+
+        num_methods = len(method_match)
+        num_quantiles = len(epsilon_rashomon_per_quantile.keys())
+
+        base_positions = np.arange(1, num_quantiles + 1)
+
+        # dynamic spacing
+        total_width = 0.8
+        width = total_width / num_methods
+
+        # dynamic colors
+        #colors = plt.cm.tab10(np.linspace(0, 1, num_methods))
+
+
+        # --- BOX PLOTS (left axis) ---
+
+
+        # center all groups
+        positions = base_positions + (i - (num_methods - 1)/2) * width
+
+        box = plt.boxplot(
+            all_SP_per_quantile,
+            positions=positions,
+            widths=width * 0.9,
+            showmeans=True,
+            whis=[0, 100],
+            patch_artist=True
+        )
+
+        for patch in box['boxes']:
+            patch.set_facecolor(color_map[j])
+
+
+
+    plt.xlabel(f'Quantiles of Coverage Rate')
+    plt.ylabel('Number of Rules')
+    plt.title(f'{Dataset_name.capitalize()} | {demographic_group}')
+
+    labels = []
+    for i in range(len(quantiles) - 1):
+        if i < len(quantiles) - 2:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f})")
+        else:
+            labels.append(f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f}]")
+
+
+    # boxplot legend (groups)
+    legend_elements = [
+        Patch(facecolor=color_map[method], label=method)
+        for i, method in enumerate(method_match)
+    ]
+
+    plt.legend(handles=legend_elements, loc='upper left')
+    plt.xticks(base_positions, labels)
+    plt.grid(axis='y')
+    plt.tight_layout()
+    # --- save ---
+    output_dir = Path.cwd()/'plots'/'Sparsity'
+    output_dir.mkdir(exist_ok=True)
+
+    output_file = output_dir / f"Fair_Sparsity{Dataset_name}_{demographic_group}.png"
+    plt.savefig(output_file, bbox_inches="tight")
+    #plt.show()
+    plt.close()
 
 if __name__ == '__main__':
 
     result_dir = Path.cwd()/"bootstrap_results"
     DATASETS = ["compas", "adult", "acs_employ"]
+    Dataset_name = 'compas'
     groups = ['Gender', 'Age', 'Race']
     method = 'HybridCORELSPostClassifier'
     epsilon = 0.01 
@@ -2174,7 +2672,7 @@ if __name__ == '__main__':
     #Analysis over quantiles
     #################################
     
-    for dataset in DATASETS:
+    # for dataset in DATASETS:
         # individual_arbitrariness_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir,epsilon=epsilon,split=split,n_quantiles=4, bins=None)    
         #sparity_all_methods(Dataset_name=dataset,seed=seed, result_dir=result_dir, epsilon=epsilon, n_quantiles=4, bins=None)
         # for group in groups:
@@ -2184,3 +2682,14 @@ if __name__ == '__main__':
             # for method in ESTIMATORS:
             #     comprehensive_ICF_plot_2_axis_quantiles(Dataset_name=dataset, method=method, seed=seed, result_dir=result_dir, n_quantiles=4 ,epsilon=0.01,bins=None,split='train', demographic_group=group)
 
+
+
+
+    #################################
+    #Analysis After Mitigation
+    #################################
+    for group in groups:
+        #Fair_max_delta_ICF_all_methods (Dataset_name,seed, epsilon,split, demographic_group=group, n_quantiles=4, bins=None)
+        #Fair_max_EO_all_methods (Dataset_name,seed, epsilon,split, demographic_group= group, model_part= 'TPR_overal', n_quantiles=4, bins=None)
+        #Fair_max_SP_all_methods (Dataset_name,seed, epsilon,split, demographic_group= group, model_part= 'PPR_overal', n_quantiles=4, bins=None)
+        Fair_Sparsity_all_methods (Dataset_name,seed, epsilon, demographic_group = group, n_quantiles = 4, bins = None)
