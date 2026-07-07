@@ -604,7 +604,7 @@ class Dataset():
         self.preprocessed = True
 
 
-    def get_data_norulemining(self, splits, random_state_param=42):
+    def get_data_norulemining(self, splits, random_state_param=42, preprocess=False):
         """This method split data to train and test set after preprocessing
 
         Args:
@@ -616,7 +616,7 @@ class Dataset():
         and y={'train':y_train,'test': y_test}
         """
         # Pre-process data to add demographic groups columns
-        if not self.preprocessed:
+        if not self.preprocessed and preprocess:
             self.pre_process()
 
         # Generate splits
@@ -643,7 +643,42 @@ class Dataset():
             y_dict[split_names[2]] = y_3
         return X_dict, y_dict, self.features, self.prediction
     
+    def split_data_as_dict_withsize(self, splits, random_state_param=42):
+        """This method split data to train and test set after preprocessing
+        # it was called get_data_norulemining in hybridCORELS
+        Args:
+            splits (dict): example {"train" : 0.8, "test" : 0.2}
+            random_state_param (int, optional):  Defaults to 42.
 
+        Returns:
+            dict: the output is X={'train':X_train,'test': X_test}
+        and y={'train':y_train,'test': y_test}
+        """
+
+        # Generate splits
+        assert len(splits) <= 3, "We only support splitting the data to up to 3 folds"
+        split_names = list(splits.keys())
+        split_ratios = list(splits.values())
+        assert np.sum(split_ratios) <= self.X.shape[0], "The split size must be less than or equal to the number of datapoints"
+        X_dict = {}
+        y_dict = {}
+        X_1, X_2, y_1, y_2 = train_test_split(self.X, self.y, train_size=split_ratios[0],
+                                            shuffle=True, random_state=random_state_param)
+        X_dict[split_names[0]] = X_1
+        y_dict[split_names[0]] = y_1
+        if len(splits) == 2:
+            X_dict[split_names[1]] = X_2
+            y_dict[split_names[1]] = y_2
+        else:
+            # sub_ratio = split_ratios[1] / (split_ratios[1] + split_ratios[2])
+            X_2, X_3, y_2, y_3 = train_test_split(X_2, y_2, train_size=split_ratios[1], test_size= split_ratios[2],
+                                            shuffle=True, random_state=random_state_param)
+            X_dict[split_names[1]] = X_2
+            y_dict[split_names[1]] = y_2
+            X_dict[split_names[2]] = X_3
+            y_dict[split_names[2]] = y_3
+        return X_dict, y_dict, self.features, self.prediction
+    
     def demographicGroup(self, summarized = False):
         """define demographic groups based on dataset name"""
         if self.name == 'adult':
