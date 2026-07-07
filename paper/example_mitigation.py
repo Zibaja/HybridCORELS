@@ -392,8 +392,8 @@ def send():
 
 def receive():
     print("Receiving results from Compute Canada...")
-    src_path = Path(REM_PATH, "HybridCORELS", "paper", "bootstrap_results", "Race/*")
-    dst_path = Path(LOC_PATH, "paper", "Mitigation_results", "Race")
+    src_path = Path(REM_PATH, "HybridCORELS", "paper", "bootstrap_results","Gender", "new/*")
+    dst_path = Path(LOC_PATH, "paper", "Mitigation_results", "MGender")
 
     cmd_str = f"rsync -av {src_path} {dst_path}"
     

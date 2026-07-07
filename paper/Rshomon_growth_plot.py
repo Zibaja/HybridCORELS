@@ -12,6 +12,7 @@ from companion_rule_list import CRL
 import pickle
 from pathlib import Path
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 
 
@@ -254,13 +255,10 @@ def plot_error_charts_transparency_group(Dataset_name, method):
 accuracy greater than or equal to (1 - ϵ) times the maximum accuracy."""
 
 
-
-
 ##################################################
 #same plot as above only in 4 subplots
 
 ##################################################
-
 
 
 def plot_grouped_subplots(Dataset_name, method):
@@ -611,7 +609,6 @@ def Rashomon_Growth_each_quantiles (Dataset_name, method, result_dir, seed=0, n_
         plt.close()
 
 
-
 def Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None):
 
 
@@ -732,6 +729,115 @@ def Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, s
     plt.close()
 
 
+def Rashomon_Growth_one_quantiles (method, result_dir,quantile, seed=0, n_quantiles=4, bins=None):
+    """
+    This plots one quantile, three dataset, one method, same axis
+    quantile arguemnet is the name of the requested quantile like q1, q2, q3, ....
+    """
+
+    plt.figure(figsize=(7, 4))
+    for dataset in DATASETS:
+        
+        # --- compute Rashomon Set ---
+        epsilon_rashomon_per_quantile, unique_models_per_quantiles, quantiles = generate_quantiles_Rashomon(
+            dataset, method, result_dir, seed=seed, n_quantiles=n_quantiles, bins=bins, epsilon=0.01)
+
+        n_q = len(unique_models_per_quantiles)
+
+        q = quantile
+        models = unique_models_per_quantiles[q]
+        if len(models) == 0:
+            continue
+     
+
+        # =========================
+        # 2. Plot each quantile
+        # =========================
+        models = unique_models_per_quantiles[q]
+
+
+        accs = np.array([m['acc_train'] for m in models])
+        max_acc = accs.max()
+
+        eps_values = 1 - accs / max_acc
+        eps_sorted = np.sort(eps_values)
+
+        eps_unique, counts_unique = np.unique(eps_sorted, return_counts=True)
+        counts_cum = np.cumsum(counts_unique)
+
+        x_vals = 1 - eps_unique
+
+        # Label
+    
+
+        
+        # Plot
+        plt.step(x_vals, counts_cum, where='post', label=f"{dataset}")
+
+        # Add vertical reference line at x = 0.990
+        plt.axvline(x=0.990, linestyle='--', linewidth=1)
+        # Formatting
+        plt.xlabel("1 - Error Tolerance")
+        plt.ylabel("# Rashomon Models")
+        plt.grid(True)
+        #plt.legend()
+
+        # IMPORTANT: consistent axis limits
+        plt.gca().invert_xaxis()
+
+    i = list(epsilon_rashomon_per_quantile.keys()).index(quantile)
+    label = (
+            f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f})"
+            if i < n_q - 1
+            else f"[{quantiles[i]:.2f}, {quantiles[i+1]:.2f}]")
+    # Global title
+    plt.title(f"Coverage: {label}", fontsize=14)
+
+    plt.tight_layout()
+
+    # =========================
+    # 4. Save
+    # =========================
+    output_dir = Path.cwd() / 'plots' / 'RS'
+    output_dir.mkdir(exist_ok=True)
+
+    output_file = output_dir / f"RS_{method}_{quantile}.pdf"
+    
+    plt.savefig(output_file, bbox_inches="tight")
+    #plt.show()
+    plt.close()
+
+DATASET_COLORS = {
+    "compas": "tab:blue",
+    "adult": "tab:orange",
+    "acs_employ": "tab:green",
+}
+
+def save_RS_legend():
+
+    output_dir = Path.cwd() / "plots" / "RS"
+    output_dir.mkdir(exist_ok=True)
+
+    legend_elements = [
+        Line2D([0], [0], color=DATASET_COLORS[dataset], lw=2, label=dataset)
+        for dataset in DATASETS
+    ]
+
+    legend_elements.append(
+        Line2D([0], [0], color="black", linestyle="--", lw=1, label=r"$1-\epsilon = 0.990$")
+    )
+
+    legend_fig = plt.figure(figsize=(6, 0.5))
+    legend_fig.legend(
+        handles=legend_elements,
+        loc="center",
+        ncol=4,
+        frameon=False
+    )
+
+    legend_fig.savefig(output_dir / "RS_shared_legend.pdf", bbox_inches="tight")
+    plt.close()
+
 if __name__ == '__main__':
     #plot_error_charts_transparency_group("compas", "HybridCORELSPostClassifier")
     #plot_grouped_subplots("compas", "HybridCORELSPostClassifier")
@@ -747,8 +853,15 @@ if __name__ == '__main__':
     # Rashomon_Growth_each_quantiles (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) #you can change n_quantiles 
     #Rashomon_Growth_all_quantiles_sameXaxis (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None) 
 
-    for dataset in DATASETS:
-        for method in ESTIMATORS.keys():
+    # for dataset in DATASETS:
+    #     for method in ESTIMATORS.keys():
             # Rashomon_Growth_all_quantiles_2 (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
             #Rashomon_Growth_each_quantiles (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None)
-            Rashomon_Growth_all_quantiles_sameXaxis (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None) 
+            #Rashomon_Growth_all_quantiles_sameXaxis (dataset, method, result_dir, seed=0, n_quantiles=4, bins=None) 
+  
+    for method in ESTIMATORS.keys():
+        for quantile in ['q1', 'q2', 'q3', 'q4']: # for now I consider 4 quantiles
+            Rashomon_Growth_one_quantiles (method, result_dir,quantile=quantile, seed=0, n_quantiles=4, bins=None)
+    
+    
+    # save_RS_legend()

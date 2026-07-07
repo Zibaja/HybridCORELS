@@ -1089,17 +1089,24 @@ def generate_quantiles(Dataset_name, method, result_dir, seed=0, n_quantiles=4, 
 
 
 
-def generate_quantiles_Rashomon (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None, epsilon=0.01):
+def generate_quantiles_Rashomon (Dataset_name, method, result_dir, seed=0, n_quantiles=4, bins=None, epsilon=0.01, max_cov=None):
 
     # -------------------------------
     # Load all models for each dataset and method and seed
     # -------------------------------
     all_models = []
     for f in result_dir.iterdir():
-        if Dataset_name in f.name and method in f.name and f"seed{seed}" in f.name:
-            with open(f, "rb") as file:
-                one_round = pickle.load(file)
-                all_models.extend(one_round)
+        if max_cov:
+            if Dataset_name in f.name and method in f.name and f"seed{seed}" in f.name and f.name.endswith(f"_{max_cov:.2f}_.pkl"):
+              
+                with open(f, "rb") as file:
+                    one_round = pickle.load(file)
+                    all_models.extend(one_round)
+        else:
+            if Dataset_name in f.name and method in f.name and f"seed{seed}" in f.name :
+                with open(f, "rb") as file:
+                    one_round = pickle.load(file)
+                    all_models.extend(one_round)
 
     # -------------------------------
     # Define bins (GLOBAL)
