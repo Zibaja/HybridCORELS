@@ -33,6 +33,9 @@ class HybridCORELSPreClassifier:
 
     min_coverage: float (between 0.0 and 1.0), minimum acceptable value for the hybrid model transparency (proportion of examples classified by the interpretable part of the model)
 
+    max_length : int, optional (default=1000000, i.e. no limit)
+        Maximum number of decision rules in the built rule list.
+        
     References
     ----------
     Original CORELS algorithm: Elaine Angelino, Nicholas Larus-Stone, Daniel Alabi, Margo Seltzer, and Cynthia Rudin.
@@ -43,7 +46,7 @@ class HybridCORELSPreClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, black_box_classifier=None, c=0.001, n_iter=10**7, map_type="prefix", policy="lower_bound",
-                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, alpha=0.0, min_coverage=0.0, random_state=42, obj_mode='collab'):
+                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, alpha=0.0, min_coverage=0.0, max_length=1000000, random_state=42, obj_mode='collab'):
         # Retrieve parameters related to CORELS, and creation of the interpretable part of the Hybrid model
         self.c = c
         self.n_iter = n_iter
@@ -51,13 +54,14 @@ class HybridCORELSPreClassifier:
         self.policy = policy
         self.verbosity = verbosity
         self.ablation = ablation
+        self.max_length = max_length
         self.max_card = max_card
         self.min_support = min_support
         self.beta = beta
         self.alpha = alpha
         self.min_coverage=min_coverage
         self.obj_mode = obj_mode
-        self.interpretable_part = PrefixCorelsPreClassifier(self.c, self.n_iter, self.map_type, self.policy, self.verbosity, self.ablation, self.max_card, self.min_support, self.beta, self.min_coverage, self.obj_mode)
+        self.interpretable_part = PrefixCorelsPreClassifier(self.c, self.n_iter, self.map_type, self.policy, self.verbosity, self.ablation, self.max_card, self.min_support, self.beta, self.min_coverage, self.obj_mode, self.max_length)
         np.random.seed(random_state)
         # Creation of the black-box part of the Hybrid model
         if black_box_classifier is None:
@@ -448,6 +452,9 @@ class HybridCORELSPostClassifier:
 
     min_coverage: float (between 0.0 and 1.0), minimum acceptable value for the hybrid model transparency (proportion of examples classified by the interpretable part of the model)
 
+    max_length : int, optional (default=1000000, i.e. no limit)
+        Maximum number of decision rules in the built rule list.
+
     References
     ----------
     Original CORELS algorithm: Elaine Angelino, Nicholas Larus-Stone, Daniel Alabi, Margo Seltzer, and Cynthia Rudin.
@@ -458,7 +465,7 @@ class HybridCORELSPostClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, black_box_classifier=None, c=0.001, n_iter=10**7, map_type="prefix", policy="lower_bound",
-                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0, random_state=42, bb_pretrained=False):
+                 verbosity=["hybrid"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0, max_length=1000000, random_state=42, bb_pretrained=False):
         # Retrieve parameters related to CORELS, and creation of the interpretable part of the Hybrid model
         self.c = c
         self.n_iter = n_iter
@@ -466,12 +473,13 @@ class HybridCORELSPostClassifier:
         self.policy = policy
         self.verbosity = verbosity
         self.ablation = ablation
+        self.max_length = max_length
         self.max_card = max_card
         self.min_support = min_support
         self.beta = beta
         self.min_coverage=min_coverage
         self.bb_pretrained=bb_pretrained
-        self.interpretable_part = PrefixCorelsPostClassifier(self.c, self.n_iter, self.map_type, self.policy, self.verbosity, self.ablation, self.max_card, self.min_support, self.beta, self.min_coverage)
+        self.interpretable_part = PrefixCorelsPostClassifier(self.c, self.n_iter, self.map_type, self.policy, self.verbosity, self.ablation, self.max_card, self.min_support, self.beta, self.min_coverage, self.max_length)
         np.random.seed(random_state)
         
         # Creation of the black-box part of the Hybrid model

@@ -74,6 +74,9 @@ class PrefixCorelsPreClassifier:
         If 'no_collab', only maximizes the prefix's accuracy
         If 'collab', maximizes (prefix accuracy + BB accuracy UB) - i.e., takes care of the inconsistent examples let to the BB part.
 
+    max_length : int, optional (default=1000000, i.e. no limit)
+        Maximum number of decision rules in the built rule list.
+
     References
     ----------
     Elaine Angelino, Nicholas Larus-Stone, Daniel Alabi, Margo Seltzer, and Cynthia Rudin.
@@ -97,7 +100,7 @@ class PrefixCorelsPreClassifier:
 
     def __init__(self, c=0.01, n_iter=10000, map_type="prefix", policy="lower_bound",
                  verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, 
-                 min_coverage=0.0, obj_mode='no_collab'):
+                 min_coverage=0.0, obj_mode='no_collab', max_length=1000000):
         self.c = c
         self.n_iter = n_iter
         self.map_type = map_type
@@ -109,6 +112,7 @@ class PrefixCorelsPreClassifier:
         self.beta=beta
         self.min_coverage = min_coverage
         self.obj_mode = obj_mode
+        self.max_length = max_length
         self.status = 3
 
     def fit(self, X, y, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
@@ -177,6 +181,10 @@ class PrefixCorelsPreClassifier:
             raise TypeError("obj_mode must be a str in {'collab', 'no_collab'}, got: ", str(self.obj_mode))
         if not self.obj_mode in ['collab', 'no_collab']:
             raise ValueError("obj_mode must be a str in {'collab', 'no_collab'}, got: ", self.obj_mode)
+        if not isinstance(self.max_length, int):
+            raise TypeError("Max length must be an integer, got: " + str(type(self.max_length)))
+        if self.max_length < 0:
+            raise ValueError("Max length must be greater than or equal to 0, got: " + str(self.max_length))
 
         label = check_array(y, ndim=1)
         labels = np.stack([ np.invert(label), label ])
@@ -265,6 +273,7 @@ class PrefixCorelsPreClassifier:
                              bb_errors,
                              self.max_card, self.min_support, verbose, mine_verbose, minor_verbose,
                              self.c, policy_id, map_id, self.ablation, False, self.beta, self.min_coverage,
+                             self.max_length,
                              inconsistent_groups_indices.astype(np.int64, copy=False), 
                              inconsistent_groups_min_card.astype(np.int64, copy=False), 
                              inconsistent_groups_max_card.astype(np.int64, copy=False))
@@ -436,7 +445,8 @@ class PrefixCorelsPreClassifier:
             "verbosity": self.verbosity,
             "ablation": self.ablation,
             "max_card": self.max_card,
-            "min_support": self.min_support
+            "min_support": self.min_support,
+            "max_length": self.max_length
         }
 
     def set_params(self, **params):
@@ -629,6 +639,9 @@ class PrefixCorelsPostClassifier:
         this value is also the maximum fraction of samples a rule can capture.
         Can be any value between 0.0 and 0.5.
 
+    max_length : int, optional (default=1000000, i.e. no limit)
+        Maximum number of decision rules in the built rule list.
+
     References
     ----------
     Elaine Angelino, Nicholas Larus-Stone, Daniel Alabi, Margo Seltzer, and Cynthia Rudin.
@@ -651,7 +664,7 @@ class PrefixCorelsPostClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, c=0.01, n_iter=10000, map_type="prefix", policy="lower_bound",
-                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0):
+                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0, max_length=1000000):
         self.c = c
         self.n_iter = n_iter
         self.map_type = map_type
@@ -662,6 +675,7 @@ class PrefixCorelsPostClassifier:
         self.min_support = min_support
         self.beta=beta
         self.min_coverage = min_coverage
+        self.max_length = max_length
         self.status = 3
 
     def fit(self, X, y, bb_errors, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
@@ -729,7 +743,11 @@ class PrefixCorelsPostClassifier:
             raise TypeError("self.beta name must be a float, got: " + str(type(self.beta)))
         if not isinstance(self.min_coverage, float): # Min_Coverage is a new parameter for HybridCORELS (controlling the minimum coverage needed)
             raise TypeError("self.min_coverage name must be a float, got: " + str(type(self.min_coverage)))
-
+        if not isinstance(self.max_length, int):
+            raise TypeError("Max length must be an integer, got: " + str(type(self.max_length)))
+        if self.max_length < 0:
+            raise ValueError("Max length must be greater than or equal to 0, got: " + str(self.max_length))
+        
         label = check_array(y, ndim=1)
         labels = np.stack([ np.invert(label), label ])
 
@@ -818,6 +836,7 @@ class PrefixCorelsPostClassifier:
                              bb_errors.astype(np.uint8, copy=False),
                              self.max_card, self.min_support, verbose, mine_verbose, minor_verbose,
                              self.c, policy_id, map_id, self.ablation, False, self.beta, self.min_coverage,
+                             self.max_length,
                              inconsistent_groups_indices.astype(np.int64, copy=False), 
                              inconsistent_groups_min_card.astype(np.int64, copy=False), 
                              inconsistent_groups_max_card.astype(np.int64, copy=False))
@@ -989,7 +1008,8 @@ class PrefixCorelsPostClassifier:
             "verbosity": self.verbosity,
             "ablation": self.ablation,
             "max_card": self.max_card,
-            "min_support": self.min_support
+            "min_support": self.min_support,
+            "max_length": self.max_length
         }
 
     def set_params(self, **params):

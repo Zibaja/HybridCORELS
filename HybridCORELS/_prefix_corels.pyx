@@ -34,7 +34,7 @@ cdef extern from "src/corels/src/run.h":
                       int map_type, int ablation, int calculate_size, int nrules, int nlabels,
                       int nsamples, rule_t* rules, rule_t* labels, rule_t* bb_errors, rule_t* meta, int freq, char* log_fname,
                       PermutationMap*& pmap, CacheTree*& tree, Queue*& queue, double& init,
-                      set[string]& verbosity, double beta, double min_coverage, int* inconsistent_groups_indices_c, 
+                      set[string]& verbosity, double beta, double min_coverage, int max_length, int* inconsistent_groups_indices_c, 
                       int* inconsistent_groups_min_card_c, int* inconsistent_groups_max_card_c, int nb_incons_groups_c)
 
     int run_corels_loop(size_t max_num_nodes, PermutationMap* pmap, CacheTree* tree, Queue* queue)
@@ -258,6 +258,7 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
              int max_card, double min_support, verbosity_str, int mine_verbose,
              int minor_verbose, double c, int policy, int map_type, int ablation,
              int calculate_size, double beta, double min_coverage,
+             int max_length,
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_indices, 
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_min_card, 
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_max_card):
@@ -448,7 +449,7 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
     
     cdef int rb = run_corels_begin(c, verbosity, policy, map_type, ablation, calculate_size,
                    n_rules, 2, nsamples, rules, labels_vecs, bb_errors_vecs, minor, 0, NULL, pmap, tree,
-                   queue, init, run_verbosity, beta, min_coverage,    
+                   queue, init, run_verbosity, beta, min_coverage, max_length, 
                    inconsistent_groups_indices_c, inconsistent_groups_min_card_c, inconsistent_groups_max_card_c, nb_incons_group_c)
 
     if rb == -1:

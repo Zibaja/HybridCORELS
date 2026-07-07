@@ -10,6 +10,8 @@
  #define printf Rprintf
 #endif
 
+int Gmax_length = 0;
+
 Queue::Queue(std::function<bool(Node*, Node*)> cmp, char const *type)
     : q_(new q (cmp)), type_(type) {}
 
@@ -34,6 +36,8 @@ rule_t* black_box_errors;
  */
 void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned short, DataStruct::Tree> parent_prefix,
         VECTOR parent_not_captured, Queue* q, PermutationMap* p) {
+    
+    if(parent->depth() < Gmax_length){
     VECTOR captured, captured_zeros, not_captured, not_captured_zeros, not_captured_equivalent, remaining_black_box_errors;
     int num_captured, c0, c1, captured_correct;
     int num_not_captured, d0, d1, default_correct, num_not_captured_equivalent, parent_errors, num_remaining_black_box_errors;
@@ -238,6 +242,7 @@ void evaluate_children(CacheTree* tree, Node* parent, tracking_vector<unsigned s
         parent->set_done();
         tree->increment_num_evaluated();
     }
+    }
 }
 
 static size_t num_iter = 0;
@@ -249,7 +254,7 @@ static double start = 0.0;
  * Explores the search space by using a queue to order the search process.
  * The queue can be ordered by DFS, BFS, or an alternative priority metric (e.g. lower bound).
  */
-void bbound_begin(CacheTree* tree, Queue* q, rule_t* bb_errors, int* inconsistent_groups_indices_c, 
+void bbound_begin(CacheTree* tree, Queue* q, int max_length, rule_t* bb_errors, int* inconsistent_groups_indices_c, 
                   int* inconsistent_groups_min_card_c, int* inconsistent_groups_max_card_c, int nb_incons_groups_c) {
     start = timestamp();
     num_iter = 0;
@@ -269,6 +274,7 @@ void bbound_begin(CacheTree* tree, Queue* q, rule_t* bb_errors, int* inconsisten
     logger->incPrefixLen(0);
     // log record for empty rule list
     logger->dumpState();
+    Gmax_length = max_length;
     inconsistent_groups_indices = inconsistent_groups_indices_c;
     inconsistent_groups_min_card = inconsistent_groups_min_card_c;
     inconsistent_groups_max_card = inconsistent_groups_max_card_c;
