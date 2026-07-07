@@ -41,7 +41,7 @@ if __name__ == "__main__":
     # Define a hybrid model
     bbox = RandomForestClassifier(random_state=42, min_samples_split=10, max_depth=10)
 
-    hyb_model = HybridCORELSPostClassifier(black_box_classifier=bbox,  
+    hyb_model = HybridCORELSPostClassifier(black_box_classifier=bbox,  max_length=2,
                                             bb_pretrained=False,
                                             beta=beta_value, 
                                             c= lambdaValue, 

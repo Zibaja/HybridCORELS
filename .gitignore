@@ -5,6 +5,7 @@ paper/local_config.py
 paper/results_1/
 paper/bootstrap_results
 paper/Mitigation_results
+paper/HybridCORELS_results
 paper/test.ipynb
 paper/plots/
 .eggs/*
