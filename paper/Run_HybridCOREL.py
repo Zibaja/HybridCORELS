@@ -15,10 +15,10 @@ import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
 from HybridCORELS import HybridCORELSPreClassifier, HybridCORELSPostClassifier
 from exp_utils import *
-from HyRS import HybridRuleSetClassifier
-from companion_rule_list import CRL
 import argparse
 import pickle
+import time
+import subprocess
 
 
 # ===============================
@@ -79,7 +79,7 @@ CORELS_PARAMS = {
     "policy": "objective",
     "max_card": 1,
     "n_iter": 10**9,
-    'min_support':0.05,
+    'min_support':0.01, #it is changed from 0.05 to 0.01 to allow more rules to be generated for the post-hybrid model
     "verbosity": ["hybrid"],
 }
 
@@ -154,7 +154,7 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
     X, y, features, prediction = my_data.split_data_as_dict_withsize(splits, random_state_param = seed)
 
                
-
+    start_time = time.time()
     # Fit a black-box
     random_state = 42+seed
     bbox = RandomForestClassifier(random_state=random_state, min_samples_leaf=10, max_depth=10)
@@ -179,6 +179,8 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
     #Build and fit the model over whole training data
     hybridmodel = spec["build"](bbox, h)
     spec["fit"](hybridmodel, X["train"], y["train"], h)
+    end_time = time.time()
+    solving_time = end_time - start_time
 
     if model in ['HybridCORELSPreClassifier','HybridCORELSPostClassifier']:
         rules = tuple([i['antecedents'][0]-1 for i in hybridmodel.interpretable_part.rl().rules][:-1] )#last one is the default rule, so I remove it
@@ -187,17 +189,12 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
         
 
 
+    pred = {k: hybridmodel.predict_with_type(X[k])[0]  for k in splits.keys()}
+    pred_type =  {k: hybridmodel.predict_with_type(X[k])[1]  for k in splits.keys()}
+    acc = {k:float(np.mean(pred[k] == y[k])) for k in splits.keys()}
+    transp_ratio = {k:float(np.mean(pred_type[k])) for k in splits.keys()}
 
 
-    #predict for train and test
-    preds_train, preds_types_train= hybridmodel.predict_with_type(X["train"]) 
-    preds_test, preds_types_test = hybridmodel.predict_with_type(X["test"])
-
-    acc_train = float(np.mean(preds_train == y['train']))
-    acc_test = float(np.mean(preds_test == y["test"])) 
-    coverage_rate_train = float(preds_types_train.mean())
-    coverage_rate_test = float(preds_types_test.mean()) 
-        #store each model
     results = [{
     "test-train-split-seed": seed,
     "dataset_name": dataset_name,
@@ -206,30 +203,81 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
     "max_lenght": max_lenght,
     "lambdaValue": lambdaValue,
     "rules": rules,
-    "preds_train": preds_train.astype(np.uint8),
-    "preds_types_train": preds_types_train.astype(np.uint8),
-    "preds_test": preds_test.astype(np.uint8),
-    "preds_types_test": preds_types_test.astype(np.uint8),
-    "acc_train": acc_train,
-    "acc_test": acc_test,
-    "coverage_rate_train": coverage_rate_train,
-    "coverage_rate_test": coverage_rate_test,  
+    "train":{ "predictions": pred['train'],
+              "pred_type": pred_type['train'], "acc": acc['train'], "transparency": transp_ratio['train']},
+    "test":{ "predictions": pred['test'],
+              "pred_type": pred_type['test'], "acc": acc['test'], "transparency": transp_ratio['test']},
+    "validation":{ "predictions": pred['validation'],
+              "pred_type": pred_type['validation'], "acc": acc['validation'], "transparency": transp_ratio['validation']},
     "status": status,
+    "solving_time": solving_time
     }]
+
   
-    print(results)
+
     return results
 
 
 
-if __name__ == "__main__":
+
+LOC_PATH = Path.home()/'programming'/'optimization'/'HybridCorels-julien'
+REM_PATH = "zibaja@nibi.alliancecan.ca:/home/zibaja/scratch"
+
+def send():
+    print("Sending project to Compute Canada...")
+    
+    cmd_str = " ".join([
+        "rsync -av",
+        "--exclude '.venv'",
+        "--exclude '__pycache__/'",
+        "--exclude '*.pyc'",
+        "--exclude '.git'",
+        "--exclude 'paper/plots/'", 
+        "--exclude 'paper/results/'", 
+        "--exclude 'paper/results_1/'", 
+        "--exclude 'paper/HybridCORELS_results/'", 
+        "--exclude 'paper/Mitigation_results/'", 
+         "--exclude 'paper/bootstrap_results/'", 
+        f"{LOC_PATH}",
+        f"{REM_PATH}"
+    ])
+    
+    subprocess.run(cmd_str, shell=True)
+
+
+def receive(): 
+    print("Receiving results from Compute Canada...")
+    src_path = Path(REM_PATH, "HybridCorels-julien", "HybridCORELS", "paper", "HybridCORELS_results/*")
+    dst_path = Path(LOC_PATH, "HybridCORELS", "paper", "HybridCORELS_results")
+
+    cmd_str = f"rsync -av {src_path} {dst_path}"
+    
+    subprocess.run(cmd_str, shell=True)
+
+
+
+
+
+def main():
     parser = argparse.ArgumentParser(description='Run bootstrap experiments for one dataset, model, and seed.')
     parser.add_argument('--dataset', type=str, default=None)
     parser.add_argument('--model', type=str, default=None)
     parser.add_argument('--seed', type=int, default=None)
-    parser.add_argument('--local_id', type=int, required=True)
+    parser.add_argument('--local_id', type=int, default=None)
+    parser.add_argument('--send', action='store_true', help='Sync project to Compute Canada')
+    parser.add_argument('--receive', action='store_true', help='Fetch results from Compute Canada')
 
     args = parser.parse_args()
+
+
+    if args.send:
+        send()
+        return
+
+    if args.receive:
+        receive()
+        return
+    
 
     filtered_experiments = []
 
@@ -249,9 +297,10 @@ if __name__ == "__main__":
     #print(f"Total filtered jobs: {len(filtered_experiments)}")
 
     cfg = filtered_experiments[args.local_id]
-    #print(f"Running configuration: {cfg}")
+    print(f"Running configuration: {cfg}")
     results = run_one_model(time_limit=3600, **cfg)
-    
+   
+    print(results)
     # Save results 
     output_dir = Path.cwd() / 'HybridCORELS_results' 
     output_dir.mkdir(exist_ok=True)
@@ -269,7 +318,11 @@ if __name__ == "__main__":
 
 
     
-    
+
+if __name__ == "__main__":
+    main()
+
+
 
 
 
