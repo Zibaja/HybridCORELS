@@ -19,6 +19,7 @@ import argparse
 import pickle
 import time
 import subprocess
+from black_box_models import BlackBox
 
 
 # ===============================
@@ -50,20 +51,20 @@ ESTIMATORS = {
             "max_lenght": [2**i for i in [1,2,3,4,5]]
         },
     },
-
+    #read bb from pretrained models are only considered for Post, should be changed later for pre
     "HybridCORELSPostClassifier": {
         "build": lambda bbox, h: HybridCORELSPostClassifier(
             black_box_classifier=bbox,
             beta=h["beta"],
             c = h["lambdaValue"],
             min_coverage=h["min_coverage"],
-            bb_pretrained=False,
+            bb_pretrained=True,
             max_length=h["max_lenght"],
             **h["corels_params"]
         ),
         "fit": lambda model, X, y, h: model.fit(X, y, features=h["features"],
                                                                 prediction_name=h['prediction_name'], time_limit=h["time_limit"],
-                                                                memory_limit=h["memory_limit"]),
+                                                                memory_limit=h["memory_limit"], black_box_predictions=h["bb_predictions"]),
         "hparams": {
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
             "lambdaValue" : [10**-2, 10**-3, 10**-4],
@@ -142,9 +143,9 @@ for dataset in DATASETS:
 def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaValue ,seed):
 
 
-    np.random.seed(seed)
+   
     
-    # #split information
+    # #split information based on size
     # train_proportion=0.8
 
     # Load data
@@ -153,12 +154,27 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
     splits = {"train": 2000, "test":2000, "validation":2000}
     X, y, features, prediction = my_data.split_data_as_dict_withsize(splits, random_state_param = seed)
 
+    #to have bb_predictions, I would need the binarized dataset :
+    #load the binarized data
+    data_binarized = Dataset.from_csv(Path.cwd()/f'data/{dataset_name}.csv', dataset_name)
+    X_binarized, y_binarized, _, _ = data_binarized.split_data_as_dict_withsize(splits, random_state_param = seed)
                
     start_time = time.time()
-    # Fit a black-box
-    random_state = 42+seed
-    bbox = RandomForestClassifier(random_state=random_state, min_samples_leaf=10, max_depth=10)
-    bbox.fit(X["train"], y["train"])
+    # # Fit a black-box
+    # bbox = RandomForestClassifier(random_state=42, min_samples_leaf=10, max_depth=10)
+    # bbox.fit(X["train"], y["train"])
+
+    # Retrieve the BB
+    bbox_type = 'random_forest'
+    model_path = Path("models") / f"{dataset_name}_{bbox_type}_{seed}.pickle"
+    if not model_path.exists():
+        ValueError(f"Black box model not found at {model_path}. Please ensure the black box is trained and saved before running this experiment.")
+
+    print("Loading the Black Box")
+
+    bbox = BlackBox(bb_type=bbox_type).load(model_path)
+    bb_predictions = {k: bbox.predict(X_binarized[k]) for k in splits.keys()}
+    print(f"stand alone black box train acc is {np.mean(bb_predictions['train']==y_binarized['train']):.2f}")
 
     spec = ESTIMATORS[model]
     h={
@@ -170,7 +186,8 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
         "lambdaValue": lambdaValue,
         "beta" : ESTIMATORS[model]["hparams"]["beta"](X["train"], lambdaValue) ,
         "corels_params": CORELS_PARAMS,
-        "prediction_name": prediction
+        "prediction_name": prediction, 
+        "bb_predictions":bb_predictions['train']
     }
 
 
@@ -189,8 +206,8 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
         
 
 
-    pred = {k: hybridmodel.predict_with_type(X[k])[0]  for k in splits.keys()}
-    pred_type =  {k: hybridmodel.predict_with_type(X[k])[1]  for k in splits.keys()}
+    pred = {k: hybridmodel.predict_with_type(X[k],black_box_predictions=bb_predictions[k])[0]  for k in splits.keys()}
+    pred_type =  {k: hybridmodel.predict_with_type(X[k],black_box_predictions=bb_predictions[k])[1]  for k in splits.keys()}
     acc = {k:float(np.mean(pred[k] == y[k])) for k in splits.keys()}
     transp_ratio = {k:float(np.mean(pred_type[k])) for k in splits.keys()}
 
