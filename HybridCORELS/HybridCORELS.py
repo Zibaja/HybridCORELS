@@ -68,8 +68,7 @@ class HybridCORELSPreClassifier:
             print("Unspecified black_box_classifier parameter, using sklearn RandomForestClassifier() for black-box part of the model.")
             from sklearn.ensemble import RandomForestClassifier
             black_box_classifier = RandomForestClassifier()
-        self.BlackBoxClassifier = black_box_classifier
-        self.black_box_part = self.BlackBoxClassifier
+        self.black_box_part = black_box_classifier
 
         # Done!
         self.is_fitted = False
@@ -257,7 +256,7 @@ class HybridCORELSPreClassifier:
 
         return self
     
-    def predict(self, X):
+    def predict(self, X, black_box_predictions=None):
         """
         Predict classifications of the input samples X.
 
@@ -267,6 +266,12 @@ class HybridCORELSPreClassifier:
             The training input samples. All features must be binary, and the matrix
             is internally converted to dtype=np.uint8. The features must be the same
             as those of the data used to train the model.
+
+        black_box_predictions : array-like, shape = [n_samples], optional (default=None)
+            If provided, these are the predictions of the black-box part of the model on the input samples X. 
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, 
+            otherwise an error will likely be raised or the predictions will be wrong.
 
         Returns
         -------
@@ -280,13 +285,14 @@ class HybridCORELSPreClassifier:
         # Predict using the black-box part of the Hybrid model
         not_captured_indices = np.where(interpretable_predictions == 2)
         if not_captured_indices[0].size > 0:
-            black_box_predictions = self.black_box_part.predict(X)          
+            if black_box_predictions is None:
+                black_box_predictions = self.black_box_part.predict(X)
             overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]
 
         # Return overall prediction
         return overall_predictions
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, black_box_probas=None):
         """
         Predict classification probabilities of the input samples X.
 
@@ -296,6 +302,11 @@ class HybridCORELSPreClassifier:
             The training input samples. All features must be binary, and the matrix
             is internally converted to dtype=np.uint8. The features must be the same
             as those of the data used to train the model.
+
+        black_box_probas : array-like, shape = [n_samples, n_classes], optional (default=None)
+            If provided, these are the classification probabilities of the black-box part of the model on the input samples X.
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, otherwise an error will likely be raised or the predictions will be wrong.
 
         Returns
         -------
@@ -309,13 +320,14 @@ class HybridCORELSPreClassifier:
         # Predict using the black-box part of the Hybrid model
         not_captured_indices = np.where(interpretable_predictions == 2)
         if not_captured_indices[0].size > 0:
-            black_box_predictions = self.black_box_part.predict_proba(X)
-            overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]
-        
+            if black_box_probas is None:
+                black_box_probas = self.black_box_part.predict_proba(X)
+            overall_predictions[not_captured_indices] = black_box_probas[not_captured_indices]
+
         # Return overall prediction
         return overall_predictions
 
-    def predict_with_type(self, X):
+    def predict_with_type(self, X, black_box_predictions=None):
         """
         Predict classifications of the input samples X, along with a boolean (one per example)
         indicating whether the example was classified by the interpretable part of the model or not.
@@ -326,6 +338,12 @@ class HybridCORELSPreClassifier:
             The training input samples. All features must be binary, and the matrix
             is internally converted to dtype=np.uint8. The features must be the same
             as those of the data used to train the model.
+
+        black_box_predictions : array-like, shape = [n_samples], optional (default=None)
+            If provided, these are the predictions of the black-box part of the model on the input samples X.
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided,
+            otherwise an error will likely be raised or the predictions will be wrong.
 
         Returns
         -------
@@ -343,8 +361,9 @@ class HybridCORELSPreClassifier:
         not_captured_indices = np.where(interpretable_predictions == 2)
         
         if not_captured_indices[0].size > 0:
-            black_box_predictions = self.black_box_part.predict(X)        
-            overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]    
+            if black_box_predictions is None:
+                black_box_predictions = self.black_box_part.predict(X)
+            overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]
             predictions_type[not_captured_indices] = 0
 
          # Return overall prediction along with the part that classified the example (1: interpretable part, 0: black-box)
@@ -364,7 +383,7 @@ class HybridCORELSPreClassifier:
             
         return s
 
-    def score(self, X, y):
+    def score(self, X, y, black_box_predictions=None):
         """
         Score the algorithm on the input samples X with the labels y. Alternatively,
         score the predictions X against the labels y (where X has been generated by 
@@ -378,6 +397,11 @@ class HybridCORELSPreClassifier:
         y : array-like, shape = [n_samples]
             The input labels. All labels must be binary.
 
+        black_box_predictions : array-like, shape = [n_samples], optional (default=None)
+            If provided, these are the predictions of the black-box part of the model on the input samples X.
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, otherwise an error will likely be raised or the predictions will be wrong. 
+
         Returns
         -------
         a : float
@@ -389,7 +413,7 @@ class HybridCORELSPreClassifier:
         check_consistent_length(p, labels)
         
         if p.ndim == 2:
-            p = self.predict(p)
+            p = self.predict(p, black_box_predictions=black_box_predictions)
         elif p.ndim != 1:
             raise ValueError("Input samples must have only 1 or 2 dimensions, got " + str(p.ndim) +
                              " dimensions")
@@ -489,8 +513,7 @@ class HybridCORELSPostClassifier:
             print("Unspecified black_box_classifier parameter, using sklearn RandomForestClassifier() for black-box part of the model.")
             from sklearn.ensemble import RandomForestClassifier
             black_box_classifier = RandomForestClassifier()
-        self.BlackBoxClassifier = black_box_classifier
-        self.black_box_part = self.BlackBoxClassifier
+        self.black_box_part = black_box_classifier
 
         # If parameters indicate that BB is pretrained, verify it now
         if self.bb_pretrained:
@@ -523,7 +546,7 @@ class HybridCORELSPostClassifier:
         else:
             return loaded_object
 
-    def fit(self, X, y, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
+    def fit(self, X, y, features=[], prediction_name="prediction", time_limit = None, memory_limit=None, black_box_predictions=None):
         """
         Build a CORELS classifier from the training set (X, y).
 
@@ -544,6 +567,11 @@ class HybridCORELSPostClassifier:
         prediction_name : string, optional(default="prediction")
             The name of the feature that is being predicted.
 
+        black_box_predictions: array-like, shape = [n_samples], optional (default=None)
+            Predictions of the black-box part of the model on the input samples X.
+            If bb_pretrained is True and the black-box is trained on different features than those of X, 
+            this needs to be provided, otherwise an error will likely be raised or the predictions will be wrong.
+
         time_limit : int, maximum number of seconds allowed for the model building 
         (this timeout considers only the interpretable part building using the modified CORELS algorithm)
         Note that this specifies the CPU time and NOT THE WALL-CLOCK TIME
@@ -557,13 +585,18 @@ class HybridCORELSPostClassifier:
         """
         # 1) (if not pretrained) Fit the black-box part of the Hybrid model
         if not self.bb_pretrained:
+            if black_box_predictions is not None:
+                raise ValueError("black_box_predictions parameter should not be provided when the black-box is not pretrained.")
             if "hybrid" in self.verbosity:
                 print("Training the BB part on the entire dataset")
             self.black_box_part.fit(X, y)
         else:
             if "hybrid" in self.verbosity:
                 print("Not retraining BB.")
-        bb_errors = np.asarray(self.black_box_part.predict(X) != y).astype(int)
+        if black_box_predictions is None:
+            black_box_predictions = self.black_box_part.predict(X)
+
+        bb_errors = np.asarray(black_box_predictions != y).astype(int)
         #print("python computed bb error rate = ", np.mean(bb_errors))
         # 2) Fit the interpretable part of the model
         if "hybrid" in self.verbosity:
@@ -578,12 +611,10 @@ class HybridCORELSPostClassifier:
             print("Interpretable part accuracy = ", np.mean(interpretable_predictions[captured_indices] == y[captured_indices]))
 
         # Finally set the black-box metrics
-        X_not_captured = X[not_captured_indices]
-        y_not_captured = y[not_captured_indices]
         self.black_box_support = not_captured_indices[0].size # Proportion of training examples falling into the black-box part
         if not_captured_indices[0].size > 0:
-            self.black_box_accuracy = self.black_box_part.score(X_not_captured, y_not_captured) # Black-Box accuracy on these examples
-            y_not_captured_unique_counts = np.unique(y_not_captured, return_counts=True)[1]
+            self.black_box_accuracy = np.mean(y[not_captured_indices] != black_box_predictions[not_captured_indices]) # Black-Box accuracy on these examples
+            y_not_captured_unique_counts = np.unique(y[not_captured_indices], return_counts=True)[1]
             self.black_box_majority = max(y_not_captured_unique_counts)/sum(y_not_captured_unique_counts)
             if "hybrid" in self.verbosity:
                 #print("majority pred = ", self.black_box_majority, "BB accuracy = ", self.black_box_accuracy)
@@ -595,11 +626,11 @@ class HybridCORELSPostClassifier:
         # Done!
         self.is_fitted = True
         if "hybrid" in self.verbosity:
-            print("Training accuracy overall = ", self.score(X, y))
+            print("Training accuracy overall = ", self.score(X, y, black_box_predictions=black_box_predictions))
 
         return self
 
-    def predict(self, X):
+    def predict(self, X, black_box_predictions=None):
         """
         Predict classifications of the input samples X.
 
@@ -609,6 +640,12 @@ class HybridCORELSPostClassifier:
             The training input samples. All features must be binary, and the matrix
             is internally converted to dtype=np.uint8. The features must be the same
             as those of the data used to train the model.
+    
+        black_box_predictions : array-like, shape = [n_samples], optional (default=None)
+            If provided, these are the predictions of the black-box part of the model on the input samples X. 
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, 
+            otherwise an error will likely be raised or the predictions will be wrong.
 
         Returns
         -------
@@ -622,13 +659,14 @@ class HybridCORELSPostClassifier:
         # Predict using the black-box part of the Hybrid model
         not_captured_indices = np.where(interpretable_predictions == 2)
         if not_captured_indices[0].size > 0:
-            black_box_predictions = self.black_box_part.predict(X)          
+            if black_box_predictions is None:
+                black_box_predictions = self.black_box_part.predict(X)
             overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]
 
         # Return overall prediction
         return overall_predictions
 
-    def predict_proba(self, X):
+    def predict_proba(self, X, black_box_probas=None):
         """
         Predict classification probabilities of the input samples X.
 
@@ -638,6 +676,11 @@ class HybridCORELSPostClassifier:
             The training input samples. All features must be binary, and the matrix
             is internally converted to dtype=np.uint8. The features must be the same
             as those of the data used to train the model.
+
+        black_box_probas : array-like, shape = [n_samples, n_classes], optional (default=None)
+            If provided, these are the classification probabilities of the black-box part of the model on the input samples X.
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, otherwise an error will likely be raised or the predictions will be wrong.
 
         Returns
         -------
@@ -651,13 +694,14 @@ class HybridCORELSPostClassifier:
         # Predict using the black-box part of the Hybrid model
         not_captured_indices = np.where(interpretable_predictions == 2)
         if not_captured_indices[0].size > 0:
-            black_box_predictions = self.black_box_part.predict_proba(X)
-            overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]
-        
+            if black_box_probas is None:
+                black_box_probas = self.black_box_part.predict_proba(X)
+            overall_predictions[not_captured_indices] = black_box_probas[not_captured_indices]
+
         # Return overall prediction
         return overall_predictions
 
-    def predict_with_type(self, X):
+    def predict_with_type(self, X, black_box_predictions=None):
         """
         Predict classifications of the input samples X, along with a boolean (one per example)
         indicating whether the example was classified by the interpretable part of the model or not.
@@ -668,6 +712,11 @@ class HybridCORELSPostClassifier:
             The training input samples. All features must be binary, and the matrix
             is internally converted to dtype=np.uint8. The features must be the same
             as those of the data used to train the model.
+
+        black_box_predictions : array-like, shape = [n_samples], optional (default=None)
+            If provided, these are the predictions of the black-box part of the model on the input samples X.
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, otherwise an error will likely be raised or the predictions will be wrong.
 
         Returns
         -------
@@ -685,7 +734,8 @@ class HybridCORELSPostClassifier:
         not_captured_indices = np.where(interpretable_predictions == 2)
         
         if not_captured_indices[0].size > 0:
-            black_box_predictions = self.black_box_part.predict(X)        
+            if black_box_predictions is None:
+                black_box_predictions = self.black_box_part.predict(X)
             overall_predictions[not_captured_indices] = black_box_predictions[not_captured_indices]    
             predictions_type[not_captured_indices] = 0
 
@@ -706,7 +756,7 @@ class HybridCORELSPostClassifier:
             
         return s
 
-    def score(self, X, y):
+    def score(self, X, y, black_box_predictions=None):
         """
         Score the algorithm on the input samples X with the labels y. Alternatively,
         score the predictions X against the labels y (where X has been generated by 
@@ -720,6 +770,11 @@ class HybridCORELSPostClassifier:
         y : array-like, shape = [n_samples]
             The input labels. All labels must be binary.
 
+        black_box_predictions : array-like, shape = [n_samples], optional (default=None)
+            If provided, these are the predictions of the black-box part of the model on the input samples X. 
+            If not provided, the black-box part will be used to predict on X.
+            Note that if the black-box part is trained on different features than those of X, this needs to be provided, otherwise an error will likely be raised or the predictions will be wrong.
+
         Returns
         -------
         a : float
@@ -731,7 +786,7 @@ class HybridCORELSPostClassifier:
         check_consistent_length(p, labels)
         
         if p.ndim == 2:
-            p = self.predict(p)
+            p = self.predict(p, black_box_predictions=black_box_predictions)
         elif p.ndim != 1:
             raise ValueError("Input samples must have only 1 or 2 dimensions, got " + str(p.ndim) +
                              " dimensions")
