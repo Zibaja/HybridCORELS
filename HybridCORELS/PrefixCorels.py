@@ -77,6 +77,9 @@ class PrefixCorelsPreClassifier:
     max_length : int, optional (default=1000000, i.e. no limit)
         Maximum number of decision rules in the built rule list.
 
+    allow_negations : bool, optional (default=False)
+        Whether to mine negated features in addition to positive features.
+
     References
     ----------
     Elaine Angelino, Nicholas Larus-Stone, Daniel Alabi, Margo Seltzer, and Cynthia Rudin.
@@ -100,7 +103,7 @@ class PrefixCorelsPreClassifier:
 
     def __init__(self, c=0.01, n_iter=10000, map_type="prefix", policy="lower_bound",
                  verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, 
-                 min_coverage=0.0, obj_mode='no_collab', max_length=1000000):
+                 min_coverage=0.0, obj_mode='no_collab', max_length=1000000, allow_negations=False):
         self.c = c
         self.n_iter = n_iter
         self.map_type = map_type
@@ -113,6 +116,7 @@ class PrefixCorelsPreClassifier:
         self.min_coverage = min_coverage
         self.obj_mode = obj_mode
         self.max_length = max_length
+        self.allow_negations = allow_negations
         self.status = 3
 
     def fit(self, X, y, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
@@ -185,6 +189,8 @@ class PrefixCorelsPreClassifier:
             raise TypeError("Max length must be an integer, got: " + str(type(self.max_length)))
         if self.max_length < 0:
             raise ValueError("Max length must be greater than or equal to 0, got: " + str(self.max_length))
+        if not isinstance(self.allow_negations, bool):
+            raise TypeError("allow_negations must be a bool, got: " + str(type(self.allow_negations)))
 
         label = check_array(y, ndim=1)
         labels = np.stack([ np.invert(label), label ])
@@ -271,7 +277,7 @@ class PrefixCorelsPreClassifier:
         fr = fit_wrap_begin(samples.astype(np.uint8, copy=False),
                              labels.astype(np.uint8, copy=False), rl.features,
                              bb_errors,
-                             self.max_card, self.min_support, verbose, mine_verbose, minor_verbose,
+                             self.max_card, self.min_support, verbose, mine_verbose, minor_verbose, self.allow_negations,
                              self.c, policy_id, map_id, self.ablation, False, self.beta, self.min_coverage,
                              self.max_length,
                              inconsistent_groups_indices.astype(np.int64, copy=False), 
@@ -642,6 +648,9 @@ class PrefixCorelsPostClassifier:
     max_length : int, optional (default=1000000, i.e. no limit)
         Maximum number of decision rules in the built rule list.
 
+    allow_negations : bool, optional (default=False)
+        Whether to mine negated features in addition to positive features.
+
     References
     ----------
     Elaine Angelino, Nicholas Larus-Stone, Daniel Alabi, Margo Seltzer, and Cynthia Rudin.
@@ -664,7 +673,7 @@ class PrefixCorelsPostClassifier:
     _estimator_type = "classifier"
 
     def __init__(self, c=0.01, n_iter=10000, map_type="prefix", policy="lower_bound",
-                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0, max_length=1000000):
+                 verbosity=["rulelist"], ablation=0, max_card=2, min_support=0.01, beta=0.0, min_coverage=0.0, max_length=1000000, allow_negations=False):
         self.c = c
         self.n_iter = n_iter
         self.map_type = map_type
@@ -676,6 +685,7 @@ class PrefixCorelsPostClassifier:
         self.beta=beta
         self.min_coverage = min_coverage
         self.max_length = max_length
+        self.allow_negations = allow_negations
         self.status = 3
 
     def fit(self, X, y, bb_errors, features=[], prediction_name="prediction", time_limit = None, memory_limit=None):
@@ -747,6 +757,8 @@ class PrefixCorelsPostClassifier:
             raise TypeError("Max length must be an integer, got: " + str(type(self.max_length)))
         if self.max_length < 0:
             raise ValueError("Max length must be greater than or equal to 0, got: " + str(self.max_length))
+        if not isinstance(self.allow_negations, bool):
+            raise TypeError("allow_negations must be a bool, got: " + str(type(self.allow_negations)))
         
         label = check_array(y, ndim=1)
         labels = np.stack([ np.invert(label), label ])
@@ -834,7 +846,7 @@ class PrefixCorelsPostClassifier:
         fr = fit_wrap_begin(samples.astype(np.uint8, copy=False),
                              labels.astype(np.uint8, copy=False), rl.features,
                              bb_errors.astype(np.uint8, copy=False),
-                             self.max_card, self.min_support, verbose, mine_verbose, minor_verbose,
+                             self.max_card, self.min_support, verbose, mine_verbose, minor_verbose, self.allow_negations,
                              self.c, policy_id, map_id, self.ablation, False, self.beta, self.min_coverage,
                              self.max_length,
                              inconsistent_groups_indices.astype(np.int64, copy=False), 
@@ -1136,4 +1148,3 @@ class PrefixCorelsPostClassifier:
             return "exploration_not_started"
         else:
             return "unknown"
-

@@ -153,7 +153,7 @@ int getnextperm(int n, int r, int *arr, int first)
 }
 
 int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples, 
-                int max_card, double min_support, rule_t **rules_out, int verbose)
+                int max_card, double min_support, rule_t **rules_out, int verbose, int allow_negations)
 {
   if(!samples || !features) {
     return -1;
@@ -162,7 +162,7 @@ int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples,
   int *rule_ids = NULL, *rule_names_mine_lengths = NULL;
   rule_t *rules_vec = NULL, *rules_vec_mine = NULL;
   
-  nrules = nfeatures; // * 2; // modified by Julien to eliminate negations
+  nrules = allow_negations ? nfeatures * 2 : nfeatures;
   rule_alloc = nrules + 1;
   rules_vec = (rule_t*)malloc(sizeof(rule_t) * rule_alloc);
   if(!rules_vec) {
@@ -196,11 +196,13 @@ int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples,
     {
       if(rule_isset(samples[j].truthtable, nfeatures - i - 1, nfeatures)) {
         rule_set(rules_vec[i + 1].truthtable, nsamples - j - 1, 1, nsamples);
-        //rule_set(rules_vec[nrules / 2 + i + 1].truthtable, nsamples - j - 1, 0, nsamples); // modified by Julien to eliminate negations
+        if(allow_negations)
+          rule_set(rules_vec[nfeatures + i + 1].truthtable, nsamples - j - 1, 0, nsamples);
       }
       else {
         rule_set(rules_vec[i + 1].truthtable, nsamples - j - 1, 0, nsamples);
-        //rule_set(rules_vec[nrules / 2 + i + 1].truthtable, nsamples - j - 1, 1, nsamples); // modified by Julien to eliminate negations
+        if(allow_negations)
+          rule_set(rules_vec[nfeatures + i + 1].truthtable, nsamples - j - 1, 1, nsamples);
       }
     }
   }
@@ -223,16 +225,16 @@ int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples,
     }
     rule_copy(rules_vec_mine[nrules_mine].truthtable, rules_vec[i + 1].truthtable, nsamples);
     
-    //if(i < (nrules / 2)) { // modified by Julien to eliminate negations
+    if(i < nfeatures) {
       rules_vec_mine[nrules_mine].features = strdup(features[i]);
       rules_vec_mine[nrules_mine].cardinality = i + 1;
-   // }
-   /* else { // modified by Julien to eliminate negations
-      rules_vec_mine[nrules_mine].features = (char*)malloc(strlen(features[i - (nrules / 2)]) + 5);
-      strcpy(rules_vec_mine[nrules_mine].features, features[i - (nrules / 2)]);
+    }
+    else {
+      rules_vec_mine[nrules_mine].features = (char*)malloc(strlen(features[i - nfeatures]) + 5);
+      strcpy(rules_vec_mine[nrules_mine].features, features[i - nfeatures]);
       strcat(rules_vec_mine[nrules_mine].features, "-not");
-      rules_vec_mine[nrules_mine].cardinality = -(i - (nrules / 2)) - 1;
-    }*/
+      rules_vec_mine[nrules_mine].cardinality = -(i - nfeatures) - 1;
+    }
 
     rule_names_mine_lengths[nrules_mine] = strlen(rules_vec_mine[nrules_mine].features);
     
@@ -245,13 +247,13 @@ int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples,
       rules_vec[ntotal_rules + 1].cardinality = 1;
       rules_vec[ntotal_rules + 1].support = ones;
 
-      // if(i < (nrules / 2)) // modified by Julien to eliminate negations
+      if(i < nfeatures)
         rules_vec[ntotal_rules + 1].features = strdup(features[i]);
-      /*else {
-        rules_vec[ntotal_rules + 1].features = (char*)malloc(strlen(features[i - (nrules / 2)]) + 5);
-        strcpy(rules_vec[ntotal_rules + 1].features, features[i - (nrules / 2)]);
+      else {
+        rules_vec[ntotal_rules + 1].features = (char*)malloc(strlen(features[i - nfeatures]) + 5);
+        strcpy(rules_vec[ntotal_rules + 1].features, features[i - nfeatures]);
         strcat(rules_vec[ntotal_rules + 1].features, "-not");
-      }*/
+      }
    
       ntotal_rules++;
       
@@ -276,12 +278,22 @@ int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples,
 
     while(r != -1) {
       int valid = 1;
+
+      // A feature and its negation can never form a useful conjunction.
+      for(int i = 0; allow_negations && i < card; i++) {
+        for(int j = i + 1; j < card; j++) {
+          if(rules_vec_mine[rule_ids[i]].cardinality ==
+             -rules_vec_mine[rule_ids[j]].cardinality) {
+            valid = 0;
+          }
+        }
+      }
       
       rule_copy(gen_rule.truthtable, rules_vec_mine[rule_ids[0]].truthtable, nsamples);
       int ones = count_ones_vector(gen_rule.truthtable, nsamples);
 
       // Generate the new rule by successive and operations, and check if it has a valid support
-      if((double)ones / (double)nsamples >= min_support) {
+      if(valid && (double)ones / (double)nsamples >= min_support) {
         for(int i = 1; i < card; i++) {
           rule_vand(gen_rule.truthtable, rules_vec_mine[rule_ids[i]].truthtable, gen_rule.truthtable, nsamples, &ones);
           if((double)ones / (double)nsamples < min_support) {

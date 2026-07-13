@@ -45,7 +45,7 @@ cdef extern from "src/corels/src/run.h":
 
 cdef extern from "src/utils.hh":
     int mine_rules(char **features, rule_t *samples, int nfeatures, int nsamples, 
-                int max_card, double min_support, rule_t **rules_out, int verbose)
+                int max_card, double min_support, rule_t **rules_out, int verbose, int allow_negations)
 
     int minority(rule_t* rules, int nrules, rule_t* labels, int nsamples, rule_t* minority_out, int verbose)
 
@@ -256,7 +256,7 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
              features, 
              np.ndarray[np.uint8_t, ndim=2] bb_errors,
              int max_card, double min_support, verbosity_str, int mine_verbose,
-             int minor_verbose, double c, int policy, int map_type, int ablation,
+             int minor_verbose, int allow_negations, double c, int policy, int map_type, int ablation,
              int calculate_size, double beta, double min_coverage,
              int max_length,
              np.ndarray[np.int64_t, ndim=1] inconsistent_groups_indices, 
@@ -343,7 +343,7 @@ def fit_wrap_begin(np.ndarray[np.uint8_t, ndim=2] samples,
     n_rules = 0
 
     cdef int r = mine_rules(features_vec, samples_vecs, nfeatures, nsamples,
-                max_card, min_support, &rules, mine_verbose)
+                max_card, min_support, &rules, mine_verbose, allow_negations)
 
     if features_vec != NULL:
         for i in range(nfeatures):
