@@ -48,7 +48,7 @@ ESTIMATORS = {
             "beta": lambda X,lambdaValue : min([ (1 / X.shape[0]) / 2, lambdaValue / 2]),
             "memory_limit": 8000,
             "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95],
-            "max_lenght": [2**i for i in [1,2,3,4,5]]
+            "max_lenght": [(2**i)-1 for i in [1,2,3,4,5]]
         },
     },
     #read bb from pretrained models are only considered for Post, should be changed later for pre
@@ -70,7 +70,7 @@ ESTIMATORS = {
             "lambdaValue" : [10**-2, 10**-3, 10**-4],
             "memory_limit": 8000,
             "min_coverage": [0.1,0.2,0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9,0.95],
-            "max_lenght": [2**i for i in [1,2,3,4,5]],
+            "max_lenght": [(2**i)-1 for i in [1,2,3,4,5]],
         },
     },
 }
@@ -149,7 +149,7 @@ def run_one_model(time_limit,dataset_name, model,min_coverage,max_lenght,lambdaV
     # train_proportion=0.8
 
     # Load data
-    my_data = Dataset.from_csv(Path.cwd().parent/f'examples/data/{dataset_name}_mined.csv', dataset_name)
+    my_data = Dataset.from_csv(Path.cwd()/f'data/{dataset_name}.csv', dataset_name)
     
     splits = {"train": 2000, "test":2000, "validation":2000}
     X, y, features, prediction = my_data.split_data_as_dict_withsize(splits, random_state_param = seed)
